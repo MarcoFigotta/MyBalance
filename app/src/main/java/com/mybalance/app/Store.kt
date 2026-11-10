@@ -64,6 +64,15 @@ class Store(context: Context) {
             val out = ArrayList<Tx>()
             for (i in 0 until arr.length()) {
                 val o = arr.getJSONObject(i)
+                val ro = o.optJSONObject("rule")
+                val rule = if (ro == null) null else Recurrence(
+                    every = ro.optInt("every", 1),
+                    unit = RepeatUnit.valueOf(ro.optString("unit", "WEEK")),
+                    weekdays = ro.optInt("weekdays", 0),
+                    endType = EndType.valueOf(ro.optString("endType", "NEVER")),
+                    endDay = ro.optLong("endDay", 0L),
+                    endCount = ro.optInt("endCount", 1)
+                )
                 out.add(
                     Tx(
                         id = o.getLong("id"),
@@ -72,7 +81,8 @@ class Store(context: Context) {
                         cents = o.getLong("cents"),
                         period = Period.valueOf(o.getString("period")),
                         tag = Tag.valueOf(o.getString("tag")),
-                        startDay = o.getLong("day")
+                        startDay = o.getLong("day"),
+                        rule = rule
                     )
                 )
             }
@@ -93,6 +103,17 @@ class Store(context: Context) {
             o.put("period", t.period.name)
             o.put("tag", t.tag.name)
             o.put("day", t.startDay)
+            val r = t.rule
+            if (r != null) {
+                val ro = JSONObject()
+                ro.put("every", r.every)
+                ro.put("unit", r.unit.name)
+                ro.put("weekdays", r.weekdays)
+                ro.put("endType", r.endType.name)
+                ro.put("endDay", r.endDay)
+                ro.put("endCount", r.endCount)
+                o.put("rule", ro)
+            }
             arr.put(o)
         }
         p.edit().putString("txs", arr.toString()).apply()

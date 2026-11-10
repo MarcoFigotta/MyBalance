@@ -151,11 +151,39 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         profile = p
     }
 
-    fun addTx(type: TxType, name: String, cents: Long, period: Period, tag: Tag) {
+    fun addTx(
+        type: TxType,
+        name: String,
+        cents: Long,
+        period: Period,
+        tag: Tag,
+        rule: Recurrence? = null
+    ) {
         val lastId = txs.maxOfOrNull { it.id } ?: 0L
         val id = maxOf(System.currentTimeMillis(), lastId + 1)
-        val tx = Tx(id, type, name, cents, period, tag, LocalDate.now().toEpochDay())
+        val tx = Tx(id, type, name, cents, period, tag, LocalDate.now().toEpochDay(), rule)
         val updated = txs + tx
+        store.saveTxs(updated)
+        txs = updated
+    }
+
+    /** Modifica un movimento esistente (mantiene id e giorno di inizio). */
+    fun updateTx(
+        id: Long,
+        type: TxType,
+        name: String,
+        cents: Long,
+        period: Period,
+        tag: Tag,
+        rule: Recurrence?
+    ) {
+        val updated = txs.map {
+            if (it.id == id) {
+                it.copy(type = type, name = name, cents = cents, period = period, tag = tag, rule = rule)
+            } else {
+                it
+            }
+        }
         store.saveTxs(updated)
         txs = updated
     }

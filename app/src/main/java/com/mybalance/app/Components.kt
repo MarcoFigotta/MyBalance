@@ -65,6 +65,7 @@ fun Period.label(l: L): String = when (this) {
     Period.MONTHLY -> l("Monthly", "Mensile")
     Period.WEEKLY -> l("Weekly", "Settimanale")
     Period.ONCE -> l("One-time", "Unica")
+    Period.CUSTOM -> l("Custom", "Personalizzata")
 }
 
 fun Tag.label(l: L): String = when (this) {

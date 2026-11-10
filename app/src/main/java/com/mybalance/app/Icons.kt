@@ -17,7 +17,7 @@ import androidx.compose.ui.unit.dp
 
 enum class Ic {
     SWAP, GAUGE, USER, PENCIL, LOCK, THEME, GLOBE, LOGOUT, TRASH,
-    ARROW_UP, ARROW_DOWN, CHEVRON_RIGHT, CHEVRON_DOWN, PLUS, BACK, CHECK
+    ARROW_UP, ARROW_DOWN, CHEVRON_RIGHT, CHEVRON_DOWN, PLUS, BACK, CHECK, CLOSE
 }
 
 /** Icone minimal a tratto, disegnate su una griglia 24x24 (nessuna emoji, nessuna libreria). */
@@ -116,6 +116,9 @@ fun AppIcon(ic: Ic, tint: Color, modifier: Modifier = Modifier, iconSize: Dp = 2
             }
             Ic.BACK -> poly(15f, 5f, 8f, 12f, 15f, 19f)
             Ic.CHECK -> poly(5f, 12.5f, 10f, 17.5f, 19f, 7f)
+            Ic.CLOSE -> {
+                seg(6f, 6f, 18f, 18f); seg(18f, 6f, 6f, 18f)
+            }
         }
     }
 }

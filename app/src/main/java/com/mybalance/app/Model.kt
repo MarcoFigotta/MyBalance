@@ -14,7 +14,9 @@ import kotlin.math.pow
 
 enum class GoalType { REACH, FLOOR, TRACK }
 enum class TxType { INCOME, EXPENSE }
-enum class Period { DAILY, MONTHLY, WEEKLY, ONCE }
+enum class Period { DAILY, MONTHLY, WEEKLY, ONCE, CUSTOM }
+enum class RepeatUnit { WEEK, MONTH, YEAR }
+enum class EndType { NEVER, DATE, COUNT }
 enum class Tag { SCHOOL, WORK, HEALTH, FOOD, LEISURE, OTHER }
 enum class ThemeMode { LIGHT, DARK }
 enum class LangMode { SYSTEM, IT, EN }
@@ -30,6 +32,21 @@ data class Profile(
     val targetCents: Long
 )
 
+/**
+ * Regola di ripetizione per il periodo "Personalizzata".
+ * - every/unit: ogni quante settimane, mesi o anni
+ * - weekdays: giorni della settimana (bit 0 = lunedi' ... bit 6 = domenica), usato solo con unit = WEEK
+ * - endType: mai / in un giorno preciso (endDay) / dopo un certo numero di volte (endCount)
+ */
+data class Recurrence(
+    val every: Int,
+    val unit: RepeatUnit,
+    val weekdays: Int,
+    val endType: EndType,
+    val endDay: Long,
+    val endCount: Int
+)
+
 data class Tx(
     val id: Long,
     val type: TxType,
@@ -37,7 +54,8 @@ data class Tx(
     val cents: Long,
     val period: Period,
     val tag: Tag,
-    val startDay: Long
+    val startDay: Long,
+    val rule: Recurrence? = null
 )
 
 // ---------------------------------------------------------------------------
@@ -59,6 +77,60 @@ fun occurrencesUntil(tx: Tx, day: LocalDate): Long {
             while (!start.plusMonths(n + 1).isAfter(day)) n++
             n + 1
         }
+        Period.CUSTOM -> customOccurrences(tx, day)
+    }
+}
+
+/** Ripetizioni di un movimento "Personalizzata" dal giorno di inizio fino a `day` (incluso). */
+private fun customOccurrences(tx: Tx, day: LocalDate): Long {
+    val r = tx.rule
+    if (r == null) return if (day.toEpochDay() >= tx.startDay) 1L else 0L
+    val start = LocalDate.ofEpochDay(tx.startDay)
+    var last = day
+    if (r.endType == EndType.DATE) {
+        val limit = LocalDate.ofEpochDay(r.endDay)
+        if (limit.isBefore(last)) last = limit
+    }
+    if (last.isBefore(start)) return 0L
+    val every = maxOf(1, r.every)
+    var count = 0L
+    when (r.unit) {
+        RepeatUnit.WEEK -> {
+            val mask = if (r.weekdays == 0) (1 shl (start.dayOfWeek.value - 1)) else r.weekdays
+            var week = start.minusDays((start.dayOfWeek.value - 1).toLong())
+            while (!week.isAfter(last)) {
+                for (d in 0..6) {
+                    if ((mask and (1 shl d)) != 0) {
+                        val date = week.plusDays(d.toLong())
+                        if (!date.isBefore(start) && !date.isAfter(last)) count++
+                    }
+                }
+                week = week.plusWeeks(every.toLong())
+            }
+        }
+        RepeatUnit.MONTH -> count = stepCount(start, last, every, ChronoUnit.MONTHS)
+        RepeatUnit.YEAR -> count = stepCount(start, last, every, ChronoUnit.YEARS)
+    }
+    if (r.endType == EndType.COUNT) count = minOf(count, r.endCount.toLong())
+    return count
+}
+
+/** Quanti multipli di `every` mesi/anni a partire da `start` cadono entro `last` (start incluso). */
+private fun stepCount(start: LocalDate, last: LocalDate, every: Int, unit: ChronoUnit): Long {
+    var k = unit.between(start, last) / every
+    while (!start.plus(every * (k + 1), unit).isAfter(last)) k++
+    while (k >= 0 && start.plus(every * k, unit).isAfter(last)) k--
+    return k + 1
+}
+
+/** True se una ripetizione personalizzata ha gia' raggiunto la sua fine. */
+fun isFinished(tx: Tx, today: LocalDate): Boolean {
+    val r = tx.rule
+    if (tx.period != Period.CUSTOM || r == null) return false
+    return when (r.endType) {
+        EndType.NEVER -> false
+        EndType.DATE -> r.endDay < today.toEpochDay()
+        EndType.COUNT -> occurrencesUntil(tx, today) >= r.endCount.toLong()
     }
 }
 
@@ -148,6 +220,13 @@ fun formatMoney(cents: Long, currency: String, locale: Locale, alwaysDecimals: B
         nf.decimalFormatSymbols = symbols
     }
     return nf.format(BigDecimal.valueOf(cents, 2))
+}
+
+/** Importo in centesimi -> testo modificabile (es. 1250 -> "12.5"). */
+fun plainAmount(cents: Long): String {
+    val whole = cents / 100L
+    val frac = cents % 100L
+    return if (frac == 0L) whole.toString() else whole.toString() + "." + frac.toString().padStart(2, '0')
 }
 
 /** Lascia solo cifre e un separatore decimale (max 2 decimali). */
