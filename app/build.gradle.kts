@@ -12,15 +12,26 @@ android {
         applicationId = "com.mybalance.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
+        // Su GitHub il numero di versione cresce a ogni build, cosi' Android accetta sempre l'aggiornamento.
+        versionCode = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
         versionName = "1.0"
+    }
+
+    signingConfigs {
+        // Chiave fissa (file app/mybalance.jks): tutte le build hanno la stessa firma
+        // e si installano sopra la versione precedente senza disinstallare.
+        create("mybalance") {
+            storeFile = file("mybalance.jks")
+            storePassword = "mybalance2026"
+            keyAlias = "mybalance"
+            keyPassword = "mybalance2026"
+        }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
-            // Firma con la chiave di debug: l'APK si installa subito sul telefono (uso personale).
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("mybalance")
         }
     }
 
