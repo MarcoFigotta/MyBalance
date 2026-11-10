@@ -31,7 +31,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-private enum class Dialog { NONE, NAME, PASSWORD, LOGOUT, DELETE1, DELETE2, DELETE3 }
+private enum class Dialog { NONE, NAME, PASSWORD, LOGOUT, DELETE1, DELETE2, DELETE3, IMPORT }
 
 /** Pagina di destra: impostazioni account. */
 @Composable
@@ -40,6 +40,8 @@ fun SettingsScreen(vm: MainViewModel) {
     val p = LocalPalette.current
     val ctx = LocalContext.current
     val acc = vm.account ?: return
+    val exportData = rememberExporter(vm)
+    val importData = rememberImporter(vm)
 
     var dialog by remember { mutableStateOf(Dialog.NONE) }
     var nameInput by remember { mutableStateOf("") }
@@ -123,6 +125,12 @@ fun SettingsScreen(vm: MainViewModel) {
             }
         }
 
+        // esporta / importa
+        SurfaceCard {
+            SettingRow(Ic.ARROW_UP, l("Export data (CSV)", "Esporta dati (CSV)")) { exportData() }
+            SettingRow(Ic.ARROW_DOWN, l("Import data (CSV)", "Importa dati (CSV)")) { dialog = Dialog.IMPORT }
+        }
+
         // sessione
         SurfaceCard {
             SettingRow(Ic.LOGOUT, l("Log out", "Logout")) { dialog = Dialog.LOGOUT }
@@ -177,6 +185,20 @@ fun SettingsScreen(vm: MainViewModel) {
                 error = if (newPass.isNotEmpty()) validatePassword(newPass, l) else null
             )
         }
+
+        Dialog.IMPORT -> ConfirmDialog(
+            title = l("Import data?", "Importare i dati?"),
+            message = l(
+                "Goal, money and all transactions will be replaced with those in the file.",
+                "Obiettivo, denaro e tutti i movimenti verranno sostituiti con quelli del file."
+            ),
+            confirm = l("Choose file", "Scegli file"),
+            onConfirm = {
+                close()
+                importData()
+            },
+            onDismiss = { close() }
+        )
 
         Dialog.LOGOUT -> ConfirmDialog(
             title = l("Log out?", "Uscire dall'account?"),

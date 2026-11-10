@@ -65,6 +65,7 @@ private fun GoalCard(title: String, subtitle: String, selected: Boolean, onClick
 fun OnboardingFlow(vm: MainViewModel) {
     val l = LocalL.current
     val p = LocalPalette.current
+    val importData = rememberImporter(vm)
 
     var step by rememberSaveable { mutableStateOf(0) }
     var goalName by rememberSaveable { mutableStateOf("") }
@@ -148,6 +149,8 @@ fun OnboardingFlow(vm: MainViewModel) {
                         l("No target, just keep track.", "Nessun obiettivo, tieni solo traccia."),
                         goal == GoalType.TRACK
                     ) { goalName = GoalType.TRACK.name }
+                    Spacer(Modifier.height(8.dp))
+                    SecondaryButton(l("Import saved data", "Importa salvataggio")) { importData() }
                 }
 
                 1 -> {

@@ -188,6 +188,25 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         txs = updated
     }
 
+    /** Sostituisce obiettivo, soldi iniziali e movimenti con quelli di un salvataggio. */
+    fun importData(p: Profile, list: List<Tx>) {
+        val seen = HashSet<Long>()
+        var next = System.currentTimeMillis()
+        val fixed = list.map {
+            if (seen.add(it.id)) {
+                it
+            } else {
+                next++
+                seen.add(next)
+                it.copy(id = next)
+            }
+        }
+        store.saveProfile(p)
+        store.saveTxs(fixed)
+        profile = p
+        txs = fixed
+    }
+
     fun deleteTx(id: Long) {
         val updated = txs.filter { it.id != id }
         store.saveTxs(updated)

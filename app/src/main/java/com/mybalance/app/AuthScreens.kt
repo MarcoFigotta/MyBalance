@@ -68,6 +68,7 @@ fun RegisterScreen(vm: MainViewModel) {
     var email by rememberSaveable { mutableStateOf("") }
     var pass by rememberSaveable { mutableStateOf("") }
     var tried by rememberSaveable { mutableStateOf(false) }
+    var confirmNew by remember { mutableStateOf(false) }
 
     val nameErr = if (tried) validateName(name, l) else null
     val emailErr = if (tried) validateEmail(email, l) else null
@@ -90,12 +91,28 @@ fun RegisterScreen(vm: MainViewModel) {
             password = true, error = passErr, imeAction = ImeAction.Done
         )
         Spacer(Modifier.height(8.dp))
+        if (confirmNew) {
+            ConfirmDialog(
+                title = l("Replace existing account?", "Sostituire l'account esistente?"),
+                message = l(
+                    "An account already exists on this phone. Creating a new one deletes it and all its data.",
+                    "Esiste già un account su questo telefono. Crearne uno nuovo cancella quello attuale e tutti i suoi dati."
+                ),
+                confirm = l("Create new", "Crea nuovo"),
+                danger = true,
+                onConfirm = {
+                    confirmNew = false
+                    vm.register(name, email, pass)
+                },
+                onDismiss = { confirmNew = false }
+            )
+        }
         PrimaryButton(l("Create account", "Crea account")) {
             tried = true
             if (validateName(name, l) == null && validateEmail(email, l) == null &&
                 validatePassword(pass, l) == null
             ) {
-                vm.register(name, email, pass)
+                if (vm.account != null) confirmNew = true else vm.register(name, email, pass)
             }
         }
     }
@@ -114,7 +131,7 @@ fun LoginScreen(vm: MainViewModel, onForgot: () -> Unit) {
     var error by remember { mutableStateOf<String?>(null) }
 
     AuthScaffold(
-        title = l("Sign in", "Accedi"),
+        title = l("Log in", "Accedi"),
         subtitle = l(
             "Enter your username, e-mail and password to open your wallet.",
             "Inserisci nome utente, e-mail e password per aprire il tuo portafoglio."
@@ -128,7 +145,7 @@ fun LoginScreen(vm: MainViewModel, onForgot: () -> Unit) {
             error = error
         )
         Spacer(Modifier.height(4.dp))
-        PrimaryButton(l("Sign in", "Accedi"), enabled = name.isNotBlank() && email.isNotBlank() && pass.isNotEmpty()) {
+        PrimaryButton(l("Log in", "Accedi"), enabled = name.isNotBlank() && email.isNotBlank() && pass.isNotEmpty()) {
             when (vm.login(name, email, pass)) {
                 LoginResult.OK -> error = null
                 LoginResult.WRONG -> error = l(
@@ -245,5 +262,47 @@ fun ForgotScreen(vm: MainViewModel, onDone: () -> Unit) {
         }
         Spacer(Modifier.height(4.dp))
         LinkButton(l("Back to sign in", "Torna all'accesso"), onDone)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Accesso: "Accedi" (account esistente) e "Registrati" (nuovo account) separati
+// ---------------------------------------------------------------------------
+
+@Composable
+fun AuthHost(vm: MainViewModel) {
+    val l = LocalL.current
+    val p = LocalPalette.current
+    var tab by rememberSaveable { mutableStateOf(if (vm.account == null) 1 else 0) }
+    var forgot by rememberSaveable { mutableStateOf(false) }
+    if (forgot && vm.account != null) {
+        ForgotScreen(vm, onDone = { forgot = false })
+        return
+    }
+    Column(modifier = Modifier.fillMaxSize()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Chip(l("Log in", "Accedi"), tab == 0, { tab = 0 })
+            Chip(l("Sign up", "Registrati"), tab == 1, { tab = 1 })
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            if (tab == 0 && vm.account == null) {
+                Column(modifier = Modifier.padding(horizontal = 24.dp, vertical = 20.dp)) {
+                    Text(
+                        l("There is no account on this phone yet.", "Non c'è ancora nessun account su questo telefono."),
+                        color = p.muted, fontSize = 15.sp
+                    )
+                    LinkButton(l("Sign up", "Registrati")) { tab = 1 }
+                }
+            } else if (tab == 0) {
+                LoginScreen(vm, onForgot = { forgot = true })
+            } else {
+                RegisterScreen(vm)
+            }
+        }
     }
 }

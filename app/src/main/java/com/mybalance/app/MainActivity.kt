@@ -93,19 +93,9 @@ fun AppRoot(vm: MainViewModel) {
 
 @Composable
 private fun Router(vm: MainViewModel) {
-    var forgot by rememberSaveable { mutableStateOf(false) }
-    val account = vm.account
-    val profile = vm.profile
     when {
-        account == null -> RegisterScreen(vm)
-        !vm.loggedIn -> {
-            if (forgot) {
-                ForgotScreen(vm, onDone = { forgot = false })
-            } else {
-                LoginScreen(vm, onForgot = { forgot = true })
-            }
-        }
-        profile == null -> OnboardingFlow(vm)
+        !vm.loggedIn -> AuthHost(vm)
+        vm.profile == null -> OnboardingFlow(vm)
         else -> MainShell(vm)
     }
 }
