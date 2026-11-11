@@ -213,6 +213,20 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         txs = updated
     }
 
+    // ----- Ripetizioni annullate (dalla cronologia) -----
+
+    fun skipOccurrence(id: Long, day: Long) {
+        val updated = txs.map { if (it.id == id) it.copy(skipped = (it.skipped + day).distinct()) else it }
+        store.saveTxs(updated)
+        txs = updated
+    }
+
+    fun restoreOccurrence(id: Long, day: Long) {
+        val updated = txs.map { if (it.id == id) it.copy(skipped = it.skipped.filter { d -> d != day }) else it }
+        store.saveTxs(updated)
+        txs = updated
+    }
+
     // ----- Preferenze -----
 
     fun setTheme(mode: ThemeMode) {

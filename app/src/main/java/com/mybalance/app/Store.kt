@@ -82,7 +82,8 @@ class Store(context: Context) {
                         period = Period.valueOf(o.getString("period")),
                         tag = Tag.valueOf(o.getString("tag")),
                         startDay = o.getLong("day"),
-                        rule = rule
+                        rule = rule,
+                        skipped = o.optJSONArray("skipped")?.let { a -> (0 until a.length()).map { a.getLong(it) } } ?: emptyList()
                     )
                 )
             }
@@ -103,6 +104,11 @@ class Store(context: Context) {
             o.put("period", t.period.name)
             o.put("tag", t.tag.name)
             o.put("day", t.startDay)
+            if (t.skipped.isNotEmpty()) {
+                val sa = JSONArray()
+                for (s in t.skipped) sa.put(s)
+                o.put("skipped", sa)
+            }
             val r = t.rule
             if (r != null) {
                 val ro = JSONObject()

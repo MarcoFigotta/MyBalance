@@ -33,6 +33,7 @@ fun buildCsv(profile: Profile, txs: List<Tx>): String {
         } else {
             sb.append(",,,,,")
         }
+        sb.append(',').append(t.skipped.joinToString(";") { day(it) })
         sb.append('\n')
     }
     return sb.toString()
@@ -115,7 +116,8 @@ fun parseCsv(text: String): Pair<Profile, List<Tx>>? {
                             period = period,
                             tag = Tag.valueOf(f[6].trim()),
                             startDay = LocalDate.parse(f[7].trim()).toEpochDay(),
-                            rule = rule
+                            rule = rule,
+                            skipped = f.getOrNull(14)?.trim()?.takeIf { it.isNotEmpty() }?.split(';')?.map { LocalDate.parse(it.trim()).toEpochDay() } ?: emptyList()
                         )
                     )
                 }

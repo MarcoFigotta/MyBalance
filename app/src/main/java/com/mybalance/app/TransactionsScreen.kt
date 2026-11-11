@@ -47,6 +47,7 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.time.Instant
@@ -530,7 +531,7 @@ fun TransactionsScreen(vm: MainViewModel) {
     }
 
     val recurring = vm.txs.filter { it.period != Period.ONCE }.sortedByDescending { it.id }
-    val singles = vm.txs.filter { it.period == Period.ONCE }.sortedByDescending { it.id }
+    val history = remember(vm.txs, today) { buildHistory(vm.txs, today) }
 
     LazyColumn(
         state = listState,
@@ -648,18 +649,33 @@ fun TransactionsScreen(vm: MainViewModel) {
         item {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    l("One-time transactions", "Movimenti singoli"),
+                    l("History", "Cronologia"),
                     color = p.text, fontSize = 18.sp, fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(top = 12.dp)
                 )
-                if (singles.isEmpty()) {
+                Text(
+                    l("Last 30 days. Cancel a payment that did not happen.", "Ultimi 30 giorni. Annulla un pagamento che non è avvenuto."),
+                    color = p.muted, fontSize = 13.sp
+                )
+                if (history.isEmpty()) {
                     Text(l("Nothing here yet.", "Ancora nessun movimento."), color = p.muted, fontSize = 14.sp)
                 }
             }
         }
 
-        items(singles, key = { it.id }) { tx ->
-            TxRow(tx, cur, onDelete = { pendingDelete = tx })
+        items(history, key = { it.key }) { h ->
+            if (h.occurrence) {
+                OccurrenceRow(
+                    tx = h.tx,
+                    currency = cur,
+                    date = h.date,
+                    cancelled = h.cancelled,
+                    onCancel = { vm.skipOccurrence(h.tx.id, h.date) },
+                    onRestore = { vm.restoreOccurrence(h.tx.id, h.date) }
+                )
+            } else {
+                TxRow(h.tx, cur, onDelete = { pendingDelete = h.tx })
+            }
         }
     }
 
@@ -696,5 +712,84 @@ fun TransactionsScreen(vm: MainViewModel) {
             },
             onDismiss = { pendingDelete = null }
         )
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Cronologia: movimenti singoli + ogni occorrenza delle ripetizioni (ultimi 30 giorni)
+// ---------------------------------------------------------------------------
+
+/** Una singola occorrenza di una ripetizione: si puo' annullare il giorno stesso, o ripristinare. */
+@Composable
+fun OccurrenceRow(
+    tx: Tx,
+    currency: String,
+    date: Long,
+    cancelled: Boolean,
+    onCancel: () -> Unit,
+    onRestore: () -> Unit
+) {
+    val l = LocalL.current
+    val p = LocalPalette.current
+    val locale = LocalLocale.current
+    val income = tx.type == TxType.INCOME
+    val tone = if (income) p.positive else p.negative
+    val shown = if (cancelled) p.muted else tone
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .background(p.surface)
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(38.dp)
+                .clip(CircleShape)
+                .background(shown.copy(alpha = 0.14f)),
+            contentAlignment = Alignment.Center
+        ) {
+            AppIcon(if (income) Ic.ARROW_DOWN else Ic.ARROW_UP, shown, iconSize = 20.dp)
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                tx.name,
+                color = if (cancelled) p.muted else p.text,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                textDecoration = if (cancelled) TextDecoration.LineThrough else null
+            )
+            Text(
+                formatDay(date, locale) + " \u00B7 " + tx.tag.label(l) +
+                    (if (cancelled) " \u00B7 " + l("Cancelled", "Annullata") else ""),
+                color = p.muted, fontSize = 13.sp, maxLines = 1
+            )
+        }
+        Spacer(Modifier.width(8.dp))
+        Text(
+            (if (income) "+" else "-") + money(tx.cents, currency),
+            color = shown,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            textDecoration = if (cancelled) TextDecoration.LineThrough else null
+        )
+        Spacer(Modifier.width(6.dp))
+        if (cancelled) {
+            Chip(l("Restore", "Ripristina"), false, onRestore)
+        } else {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .clickable { onCancel() },
+                contentAlignment = Alignment.Center
+            ) {
+                AppIcon(Ic.CLOSE, p.negative, iconSize = 20.dp)
+            }
+        }
     }
 }

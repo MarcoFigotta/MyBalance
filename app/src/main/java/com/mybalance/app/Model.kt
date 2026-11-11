@@ -55,15 +55,16 @@ data class Tx(
     val period: Period,
     val tag: Tag,
     val startDay: Long,
-    val rule: Recurrence? = null
+    val rule: Recurrence? = null,
+    val skipped: List<Long> = emptyList()
 )
 
 // ---------------------------------------------------------------------------
 // Calcolo del bilancio
 // ---------------------------------------------------------------------------
 
-/** Quante volte il movimento si e' ripetuto dal giorno di inizio fino a `day` (incluso). */
-fun occurrencesUntil(tx: Tx, day: LocalDate): Long {
+/** Ripetizioni "grezze" (anche quelle annullate) dal giorno di inizio fino a `day` incluso. */
+fun rawOccurrences(tx: Tx, day: LocalDate): Long {
     val end = day.toEpochDay()
     if (end < tx.startDay) return 0L
     val gap = end - tx.startDay
@@ -130,8 +131,28 @@ fun isFinished(tx: Tx, today: LocalDate): Boolean {
     return when (r.endType) {
         EndType.NEVER -> false
         EndType.DATE -> r.endDay < today.toEpochDay()
-        EndType.COUNT -> occurrencesUntil(tx, today) >= r.endCount.toLong()
+        EndType.COUNT -> rawOccurrences(tx, today) >= r.endCount.toLong()
     }
+}
+
+/** Ripetizioni effettive: quelle grezze meno le singole occorrenze annullate. */
+fun occurrencesUntil(tx: Tx, day: LocalDate): Long {
+    val raw = rawOccurrences(tx, day)
+    val end = day.toEpochDay()
+    val cancelled = tx.skipped.count { it <= end }
+    return maxOf(0L, raw - cancelled)
+}
+
+/** Giorni in cui il movimento cade davvero (annullati inclusi) tra `from` e `to`. */
+fun occurrenceDates(tx: Tx, from: LocalDate, to: LocalDate): List<LocalDate> {
+    if (tx.period == Period.ONCE) return emptyList()
+    val out = ArrayList<LocalDate>()
+    var d = from
+    while (!d.isAfter(to)) {
+        if (rawOccurrences(tx, d) - rawOccurrences(tx, d.minusDays(1)) == 1L) out.add(d)
+        d = d.plusDays(1)
+    }
+    return out
 }
 
 fun txTotal(tx: Tx, day: LocalDate): Long {
@@ -258,4 +279,32 @@ fun parseCents(input: String): Long? {
     } catch (e: NumberFormatException) {
         null
     }
+}
+
+// ---------------------------------------------------------------------------
+// Cronologia (logica pura, usata dalla schermata)
+// ---------------------------------------------------------------------------
+
+data class HistItem(
+    val key: String,
+    val tx: Tx,
+    val date: Long,
+    val occurrence: Boolean,
+    val cancelled: Boolean
+)
+
+fun buildHistory(txs: List<Tx>, today: LocalDate): List<HistItem> {
+    val from = today.minusDays(29)
+    val out = ArrayList<HistItem>()
+    for (t in txs) {
+        if (t.period == Period.ONCE) {
+            out.add(HistItem("s" + t.id, t, t.startDay, false, false))
+        } else {
+            for (d in occurrenceDates(t, from, today)) {
+                val e = d.toEpochDay()
+                out.add(HistItem("o" + t.id + "_" + e, t, e, true, t.skipped.contains(e)))
+            }
+        }
+    }
+    return out.sortedWith(compareByDescending<HistItem> { it.date }.thenByDescending { it.tx.id })
 }
