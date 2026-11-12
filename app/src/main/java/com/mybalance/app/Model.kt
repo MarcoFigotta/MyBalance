@@ -56,7 +56,19 @@ data class Tx(
     val tag: Tag,
     val startDay: Long,
     val rule: Recurrence? = null,
-    val skipped: List<Long> = emptyList()
+    val skipped: List<Long> = emptyList(),
+    val fundId: Long? = null
+)
+
+const val FUND_ICON_COUNT = 8
+
+/** Fondo: una "tasca" in cui e' allocata una parte del denaro gia' posseduto. */
+data class Fund(
+    val id: Long,
+    val name: String,
+    val icon: Int,
+    val limited: Boolean,
+    val cents: Long
 )
 
 // ---------------------------------------------------------------------------
@@ -163,6 +175,21 @@ fun txTotal(tx: Tx, day: LocalDate): Long {
 fun balanceCents(profile: Profile, txs: List<Tx>, today: LocalDate): Long {
     var total = profile.initialCents
     for (t in txs) total += txTotal(t, today)
+    return total
+}
+
+/** Saldo di un fondo: quota iniziale + movimenti assegnati al fondo. */
+fun fundBalanceCents(fund: Fund, txs: List<Tx>, today: LocalDate): Long {
+    var total = fund.cents
+    for (t in txs) if (t.fundId == fund.id) total += txTotal(t, today)
+    return total
+}
+
+/** Denaro non assegnato a nessun fondo. */
+fun unallocatedCents(profile: Profile, funds: List<Fund>, txs: List<Tx>, today: LocalDate): Long {
+    var total = profile.initialCents
+    for (f in funds) total -= f.cents
+    for (t in txs) if (t.fundId == null) total += txTotal(t, today)
     return total
 }
 

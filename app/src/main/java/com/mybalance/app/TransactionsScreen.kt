@@ -310,13 +310,14 @@ private fun CustomPanel(
 
 /** Riga di una voce periodica, con matita (modifica) e X (elimina). */
 @Composable
-private fun RecurringRow(
+fun RecurringRow(
     tx: Tx,
     currency: String,
     today: LocalDate,
     editing: Boolean,
     onEdit: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    note: String? = null
 ) {
     val l = LocalL.current
     val p = LocalPalette.current
@@ -327,6 +328,7 @@ private fun RecurringRow(
     val shape = RoundedCornerShape(18.dp)
     var detail = tx.tag.label(l) + " · " + scheduleSummary(tx, l, locale)
     if (finished) detail = detail + " · " + l("Ended", "Terminata")
+    if (note != null) detail = detail + " · " + note
 
     Row(
         modifier = Modifier
@@ -396,7 +398,7 @@ private fun RecurringRow(
 // ---------------------------------------------------------------------------
 
 @Composable
-fun TransactionsScreen(vm: MainViewModel) {
+fun TransactionsScreen(vm: MainViewModel, pendingEdit: Tx?, onEditHandled: () -> Unit) {
     val l = LocalL.current
     val p = LocalPalette.current
     val profile = vm.profile ?: return
@@ -414,6 +416,8 @@ fun TransactionsScreen(vm: MainViewModel) {
     var periodIdx by rememberSaveable { mutableStateOf(Period.ONCE.ordinal) }
     var tagIdx by rememberSaveable { mutableStateOf(Tag.OTHER.ordinal) }
     var tried by rememberSaveable { mutableStateOf(false) }
+    var fundSel by rememberSaveable { mutableStateOf(-1L) }
+    var fundErr by remember { mutableStateOf<String?>(null) }
 
     // opzioni di "Personalizzata"
     var everyText by rememberSaveable { mutableStateOf("1") }
@@ -425,8 +429,6 @@ fun TransactionsScreen(vm: MainViewModel) {
 
     var showDate by remember { mutableStateOf(false) }
     var scrollTick by remember { mutableStateOf(0) }
-    var pendingDelete by remember { mutableStateOf<Tx?>(null) }
-
     LaunchedEffect(scrollTick) {
         if (scrollTick > 0) listState.animateScrollToItem(0)
     }
@@ -481,6 +483,8 @@ fun TransactionsScreen(vm: MainViewModel) {
         periodIdx = Period.ONCE.ordinal
         tagIdx = Tag.OTHER.ordinal
         tried = false
+        fundSel = -1L
+        fundErr = null
         resetCustomFields()
     }
 
@@ -492,6 +496,8 @@ fun TransactionsScreen(vm: MainViewModel) {
         periodIdx = tx.period.ordinal
         tagIdx = tx.tag.ordinal
         tried = false
+        fundSel = tx.fundId ?: -1L
+        fundErr = null
         val r = tx.rule
         if (r != null) {
             everyText = r.every.toString()
@@ -521,17 +527,35 @@ fun TransactionsScreen(vm: MainViewModel) {
             )
         } else null
         val type = if (isIncome) TxType.INCOME else TxType.EXPENSE
+        val fid: Long? = if (fundSel >= 0L && vm.funds.any { it.id == fundSel }) fundSel else null
+        val fund = vm.funds.firstOrNull { it.id == fid }
+        if (fund != null && fund.limited && type == TxType.EXPENSE) {
+            val others = vm.txs.filter { it.id != editingId }
+            val startDay = vm.txs.firstOrNull { it.id == editingId }?.startDay ?: today.toEpochDay()
+            val temp = Tx(0L, type, name.trim(), c, period, Tag.values()[tagIdx], startDay, rule, emptyList(), fid)
+            val after = fundBalanceCents(fund, others, today) + txTotal(temp, today)
+            if (after < 0L) {
+                fundErr = l("Not enough money in this fund.", "Il fondo non ha abbastanza denaro.")
+                return
+            }
+        }
+        fundErr = null
         if (editingId >= 0L) {
-            vm.updateTx(editingId, type, name.trim(), c, period, Tag.values()[tagIdx], rule)
+            vm.updateTx(editingId, type, name.trim(), c, period, Tag.values()[tagIdx], rule, fid)
         } else {
-            vm.addTx(type, name.trim(), c, period, Tag.values()[tagIdx], rule)
+            vm.addTx(type, name.trim(), c, period, Tag.values()[tagIdx], rule, fid)
         }
         resetForm()
         focus.clearFocus()
     }
 
-    val recurring = vm.txs.filter { it.period != Period.ONCE }.sortedByDescending { it.id }
-    val history = remember(vm.txs, today) { buildHistory(vm.txs, today) }
+    LaunchedEffect(pendingEdit) {
+        val e = pendingEdit
+        if (e != null) {
+            startEdit(e)
+            onEditHandled()
+        }
+    }
 
     LazyColumn(
         state = listState,
@@ -605,6 +629,21 @@ fun TransactionsScreen(vm: MainViewModel) {
                     }
                 }
 
+                if (vm.funds.isNotEmpty()) {
+                    SectionLabel(
+                        if (isIncome) l("Add to fund", "Inserisci nel fondo")
+                        else l("Take from fund", "Preleva dal fondo")
+                    )
+                    ChipFlow {
+                        Chip(l("None", "Nessuno"), fundSel < 0L, { fundSel = -1L; fundErr = null })
+                        for (f in vm.funds) {
+                            Chip(f.name, fundSel == f.id, { fundSel = f.id; fundErr = null })
+                        }
+                    }
+                    val fe = fundErr
+                    if (fe != null) Text(fe, color = p.negative, fontSize = 13.sp)
+                }
+
                 Spacer(Modifier.height(4.dp))
                 PrimaryButton(
                     if (editingId >= 0L) l("Save changes", "Salva modifiche")
@@ -618,63 +657,6 @@ fun TransactionsScreen(vm: MainViewModel) {
                     }
                 }
 
-                Text(
-                    l("Recurring", "Periodiche"),
-                    color = p.text, fontSize = 18.sp, fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(top = 12.dp)
-                )
-                if (recurring.isEmpty()) {
-                    Text(
-                        l(
-                            "No recurring income or expenses yet. Choose a period other than One-time to add one.",
-                            "Nessuna entrata o uscita periodica. Scegli un periodo diverso da Unica per aggiungerne una."
-                        ),
-                        color = p.muted, fontSize = 14.sp
-                    )
-                }
-            }
-        }
-
-        items(recurring, key = { it.id }) { tx ->
-            RecurringRow(
-                tx = tx,
-                currency = cur,
-                today = today,
-                editing = editingId == tx.id,
-                onEdit = { startEdit(tx) },
-                onDelete = { pendingDelete = tx }
-            )
-        }
-
-        item {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    l("History", "Cronologia"),
-                    color = p.text, fontSize = 18.sp, fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(top = 12.dp)
-                )
-                Text(
-                    l("Last 30 days. Cancel a payment that did not happen.", "Ultimi 30 giorni. Annulla un pagamento che non è avvenuto."),
-                    color = p.muted, fontSize = 13.sp
-                )
-                if (history.isEmpty()) {
-                    Text(l("Nothing here yet.", "Ancora nessun movimento."), color = p.muted, fontSize = 14.sp)
-                }
-            }
-        }
-
-        items(history, key = { it.key }) { h ->
-            if (h.occurrence) {
-                OccurrenceRow(
-                    tx = h.tx,
-                    currency = cur,
-                    date = h.date,
-                    cancelled = h.cancelled,
-                    onCancel = { vm.skipOccurrence(h.tx.id, h.date) },
-                    onRestore = { vm.restoreOccurrence(h.tx.id, h.date) }
-                )
-            } else {
-                TxRow(h.tx, cur, onDelete = { pendingDelete = h.tx })
             }
         }
     }
@@ -688,29 +670,6 @@ fun TransactionsScreen(vm: MainViewModel) {
                 showDate = false
             },
             onDismiss = { showDate = false }
-        )
-    }
-
-    val toDelete = pendingDelete
-    if (toDelete != null) {
-        ConfirmDialog(
-            title = l("Delete this transaction?", "Eliminare questo movimento?"),
-            message = if (toDelete.period == Period.ONCE) {
-                toDelete.name
-            } else {
-                toDelete.name + "\n\n" + l(
-                    "Its past occurrences will also be removed from your balance.",
-                    "Anche le ripetizioni passate verranno tolte dal bilancio."
-                )
-            },
-            confirm = l("Delete", "Elimina"),
-            danger = true,
-            onConfirm = {
-                if (editingId == toDelete.id) resetForm()
-                vm.deleteTx(toDelete.id)
-                pendingDelete = null
-            },
-            onDismiss = { pendingDelete = null }
         )
     }
 }
@@ -727,7 +686,8 @@ fun OccurrenceRow(
     date: Long,
     cancelled: Boolean,
     onCancel: () -> Unit,
-    onRestore: () -> Unit
+    onRestore: () -> Unit,
+    note: String? = null
 ) {
     val l = LocalL.current
     val p = LocalPalette.current
@@ -764,7 +724,8 @@ fun OccurrenceRow(
             )
             Text(
                 formatDay(date, locale) + " \u00B7 " + tx.tag.label(l) +
-                    (if (cancelled) " \u00B7 " + l("Cancelled", "Annullata") else ""),
+                    (if (cancelled) " \u00B7 " + l("Cancelled", "Annullata") else "") +
+                    (if (note != null) " \u00B7 " + note else ""),
                 color = p.muted, fontSize = 13.sp, maxLines = 1
             )
         }

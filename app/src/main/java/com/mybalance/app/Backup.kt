@@ -30,7 +30,7 @@ fun rememberExporter(vm: MainViewModel): () -> Unit {
                 try {
                     val out = ctx.contentResolver.openOutputStream(uri, "wt")
                     if (out != null) {
-                        out.use { it.write(Csv.export(profile, vm.txs).toByteArray(Charsets.UTF_8)) }
+                        out.use { it.write(Csv.export(profile, vm.txs, vm.funds).toByteArray(Charsets.UTF_8)) }
                         ok = true
                     }
                 } catch (e: Exception) {
@@ -69,7 +69,7 @@ fun rememberImporter(vm: MainViewModel): () -> Unit {
                     Toast.LENGTH_LONG
                 ).show()
             } else {
-                vm.importData(parsed.first, parsed.second)
+                vm.importData(parsed.first, parsed.second, parsed.third)
                 Toast.makeText(ctx, l("Data imported", "Dati importati"), Toast.LENGTH_LONG).show()
             }
         }

@@ -29,7 +29,7 @@ import java.time.LocalDate
 
 /** Riga di un movimento (usata sia nel Bilancio sia in Entrata/Uscita). */
 @Composable
-fun TxRow(tx: Tx, currency: String, onDelete: (() -> Unit)? = null) {
+fun TxRow(tx: Tx, currency: String, onDelete: (() -> Unit)? = null, note: String? = null) {
     val l = LocalL.current
     val p = LocalPalette.current
     val income = tx.type == TxType.INCOME
@@ -55,7 +55,7 @@ fun TxRow(tx: Tx, currency: String, onDelete: (() -> Unit)? = null) {
         Column(modifier = Modifier.weight(1f)) {
             Text(tx.name, color = p.text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
             Text(
-                "${tx.tag.label(l)} · ${tx.period.label(l)}",
+                "${tx.tag.label(l)} · ${tx.period.label(l)}" + (if (note != null) " · " + note else ""),
                 color = p.muted, fontSize = 13.sp, maxLines = 1
             )
         }
@@ -183,7 +183,7 @@ fun HomeScreen(vm: MainViewModel) {
                 color = p.muted, fontSize = 14.sp
             )
         } else {
-            for (tx in recent) TxRow(tx, cur)
+            for (tx in recent) TxRow(tx, cur, note = fundNote(tx, vm.funds, l))
         }
         Spacer(Modifier.height(8.dp))
     }

@@ -17,7 +17,8 @@ import androidx.compose.ui.unit.dp
 
 enum class Ic {
     SWAP, GAUGE, USER, PENCIL, LOCK, THEME, GLOBE, LOGOUT, TRASH,
-    ARROW_UP, ARROW_DOWN, CHEVRON_RIGHT, CHEVRON_DOWN, PLUS, BACK, CHECK, CLOSE
+    ARROW_UP, ARROW_DOWN, CHEVRON_RIGHT, CHEVRON_DOWN, PLUS, BACK, CHECK, CLOSE,
+    HISTORY, BANK, WALLET, CARD, COIN, SAFE, BAG, HOME, STAR
 }
 
 /** Icone minimal a tratto, disegnate su una griglia 24x24 (nessuna emoji, nessuna libreria). */
@@ -119,6 +120,58 @@ fun AppIcon(ic: Ic, tint: Color, modifier: Modifier = Modifier, iconSize: Dp = 2
             Ic.CLOSE -> {
                 seg(6f, 6f, 18f, 18f); seg(18f, 6f, 6f, 18f)
             }
+            Ic.HISTORY -> {
+                drawCircle(color = tint, radius = 8f * k, center = o(12f, 12f), style = style)
+                seg(12f, 7.5f, 12f, 12f); seg(12f, 12f, 15.5f, 14f)
+            }
+            Ic.BANK -> {
+                poly(3f, 9f, 12f, 4f, 21f, 9f, close = true)
+                seg(6f, 11.5f, 6f, 17f); seg(12f, 11.5f, 12f, 17f); seg(18f, 11.5f, 18f, 17f)
+                seg(3f, 20f, 21f, 20f)
+            }
+            Ic.WALLET -> {
+                drawRoundRect(
+                    color = tint, topLeft = o(3f, 6f), size = Size(18f * k, 14f * k),
+                    cornerRadius = CornerRadius(3f * k, 3f * k), style = style
+                )
+                seg(3f, 10f, 21f, 10f)
+                drawCircle(color = tint, radius = 1.3f * k, center = o(17f, 15f))
+            }
+            Ic.CARD -> {
+                drawRoundRect(
+                    color = tint, topLeft = o(3f, 6f), size = Size(18f * k, 12f * k),
+                    cornerRadius = CornerRadius(2.5f * k, 2.5f * k), style = style
+                )
+                seg(3f, 10f, 21f, 10f); seg(6.5f, 15f, 10.5f, 15f)
+            }
+            Ic.COIN -> {
+                drawCircle(color = tint, radius = 8f * k, center = o(12f, 12f), style = style)
+                drawCircle(color = tint, radius = 4f * k, center = o(12f, 12f), style = style)
+            }
+            Ic.SAFE -> {
+                drawRoundRect(
+                    color = tint, topLeft = o(4f, 4f), size = Size(16f * k, 16f * k),
+                    cornerRadius = CornerRadius(2f * k, 2f * k), style = style
+                )
+                drawCircle(color = tint, radius = 3.5f * k, center = o(12f, 12f), style = style)
+                seg(12f, 12f, 14.2f, 9.8f)
+                seg(7f, 20f, 7f, 22f); seg(17f, 20f, 17f, 22f)
+            }
+            Ic.BAG -> {
+                poly(5f, 8f, 19f, 8f, 18f, 20f, 6f, 20f, close = true)
+                drawArc(
+                    color = tint, startAngle = 180f, sweepAngle = 180f, useCenter = false,
+                    topLeft = o(8.5f, 3.5f), size = Size(7f * k, 7f * k), style = style
+                )
+            }
+            Ic.HOME -> {
+                poly(3.5f, 11f, 12f, 4f, 20.5f, 11f)
+                poly(6f, 9.5f, 6f, 20f, 18f, 20f, 18f, 9.5f)
+            }
+            Ic.STAR -> poly(
+                12f, 3.5f, 14.23f, 9.43f, 20.56f, 9.72f, 15.61f, 13.67f, 17.29f, 19.78f,
+                12f, 16.3f, 6.71f, 19.78f, 8.39f, 13.67f, 3.44f, 9.72f, 9.77f, 9.43f, close = true
+            )
         }
     }
 }

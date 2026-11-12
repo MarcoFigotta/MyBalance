@@ -14,13 +14,20 @@ private fun esc(s: String): String {
 
 private fun day(epoch: Long): String = LocalDate.ofEpochDay(epoch).toString()
 
-fun buildCsv(profile: Profile, txs: List<Tx>): String {
+fun buildCsv(profile: Profile, txs: List<Tx>, funds: List<Fund> = emptyList()): String {
     val sb = StringBuilder("﻿")
     sb.append("MyBalance,1\n")
     sb.append("section,goal,currency,money_owned,target_or_threshold\n")
     sb.append("PROFILE,").append(profile.goal.name).append(',').append(profile.currency).append(',')
         .append(plainAmount(profile.initialCents)).append(',').append(plainAmount(profile.targetCents)).append('\n')
-    sb.append("section,id,kind,name,amount,period,tag,start_date,every,unit,weekdays_mask,end_type,end_date,end_count\n")
+    if (funds.isNotEmpty()) {
+        sb.append("section,id,name,icon,limited,amount\n")
+        for (f in funds) {
+            sb.append("FUND,").append(f.id).append(',').append(esc(f.name)).append(',').append(f.icon).append(',')
+                .append(f.limited).append(',').append(plainAmount(f.cents)).append('\n')
+        }
+    }
+    sb.append("section,id,kind,name,amount,period,tag,start_date,every,unit,weekdays_mask,end_type,end_date,end_count,skipped,fund_id\n")
     for (t in txs) {
         sb.append("TX,").append(t.id).append(',').append(t.type.name).append(',').append(esc(t.name)).append(',')
             .append(plainAmount(t.cents)).append(',').append(t.period.name).append(',').append(t.tag.name).append(',')
@@ -34,6 +41,7 @@ fun buildCsv(profile: Profile, txs: List<Tx>): String {
             sb.append(",,,,,")
         }
         sb.append(',').append(t.skipped.joinToString(";") { day(it) })
+        sb.append(',').append(t.fundId?.toString() ?: "")
         sb.append('\n')
     }
     return sb.toString()
@@ -72,13 +80,14 @@ private fun parseLine(line: String, delim: Char): List<String> {
 }
 
 /** Legge un CSV di MyBalance. Restituisce null se il file non e' valido (nulla viene importato a meta'). */
-fun parseCsv(text: String): Pair<Profile, List<Tx>>? {
+fun parseCsv(text: String): Triple<Profile, List<Tx>, List<Fund>>? {
     return try {
         val lines = text.removePrefix("﻿").split("\n").map { it.trim('\r') }.filter { it.isNotBlank() }
         if (lines.isEmpty() || !lines[0].startsWith("MyBalance")) return null
         val delim = if (lines[0].startsWith("MyBalance;")) ';' else ','
         var profile: Profile? = null
         val txs = ArrayList<Tx>()
+        val funds = ArrayList<Fund>()
         val base = System.currentTimeMillis()
         for (line in lines.drop(1)) {
             val f = parseLine(line, delim)
@@ -91,6 +100,19 @@ fun parseCsv(text: String): Pair<Profile, List<Tx>>? {
                         initialCents = parseCents(f[3]) ?: return null,
                         currency = currency,
                         targetCents = parseCents(f[4]) ?: 0L
+                    )
+                }
+                "FUND" -> {
+                    val fid = f[1].trim().toLong()
+                    if (funds.any { it.id == fid } || f[2].isBlank()) return null
+                    funds.add(
+                        Fund(
+                            id = fid,
+                            name = f[2].trim(),
+                            icon = f[3].trim().toInt().coerceIn(0, FUND_ICON_COUNT - 1),
+                            limited = f[4].trim().equals("true", ignoreCase = true),
+                            cents = parseCents(f[5]) ?: return null
+                        )
                     )
                 }
                 "TX" -> {
@@ -117,14 +139,17 @@ fun parseCsv(text: String): Pair<Profile, List<Tx>>? {
                             tag = Tag.valueOf(f[6].trim()),
                             startDay = LocalDate.parse(f[7].trim()).toEpochDay(),
                             rule = rule,
-                            skipped = f.getOrNull(14)?.trim()?.takeIf { it.isNotEmpty() }?.split(';')?.map { LocalDate.parse(it.trim()).toEpochDay() } ?: emptyList()
+                            skipped = f.getOrNull(14)?.trim()?.takeIf { it.isNotEmpty() }?.split(';')?.map { LocalDate.parse(it.trim()).toEpochDay() } ?: emptyList(),
+                            fundId = f.getOrNull(15)?.trim()?.toLongOrNull()
                         )
                     )
                 }
             }
         }
         val p = profile ?: return null
-        Pair(p, txs)
+        val ids = funds.map { it.id }.toSet()
+        val fixed = txs.map { if (it.fundId != null && it.fundId !in ids) it.copy(fundId = null) else it }
+        Triple(p, fixed, funds.toList())
     } catch (e: Exception) {
         null
     }
@@ -132,6 +157,6 @@ fun parseCsv(text: String): Pair<Profile, List<Tx>>? {
 
 /** Punto di accesso usato da Backup.kt. */
 object Csv {
-    fun export(profile: Profile, txs: List<Tx>): String = buildCsv(profile, txs)
-    fun parse(text: String): Pair<Profile, List<Tx>>? = parseCsv(text)
+    fun export(profile: Profile, txs: List<Tx>, funds: List<Fund> = emptyList()): String = buildCsv(profile, txs, funds)
+    fun parse(text: String): Triple<Profile, List<Tx>, List<Fund>>? = parseCsv(text)
 }

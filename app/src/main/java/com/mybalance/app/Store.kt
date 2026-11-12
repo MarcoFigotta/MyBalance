@@ -83,7 +83,8 @@ class Store(context: Context) {
                         tag = Tag.valueOf(o.getString("tag")),
                         startDay = o.getLong("day"),
                         rule = rule,
-                        skipped = o.optJSONArray("skipped")?.let { a -> (0 until a.length()).map { a.getLong(it) } } ?: emptyList()
+                        skipped = o.optJSONArray("skipped")?.let { a -> (0 until a.length()).map { a.getLong(it) } } ?: emptyList(),
+                        fundId = if (o.has("fundId")) o.getLong("fundId") else null
                     )
                 )
             }
@@ -109,6 +110,8 @@ class Store(context: Context) {
                 for (s in t.skipped) sa.put(s)
                 o.put("skipped", sa)
             }
+            val fid = t.fundId
+            if (fid != null) o.put("fundId", fid)
             val r = t.rule
             if (r != null) {
                 val ro = JSONObject()
@@ -123,6 +126,43 @@ class Store(context: Context) {
             arr.put(o)
         }
         p.edit().putString("txs", arr.toString()).apply()
+    }
+
+    fun loadFunds(): List<Fund> {
+        val raw = p.getString("funds", null) ?: return emptyList()
+        return try {
+            val arr = JSONArray(raw)
+            val out = ArrayList<Fund>()
+            for (i in 0 until arr.length()) {
+                val o = arr.getJSONObject(i)
+                out.add(
+                    Fund(
+                        id = o.getLong("id"),
+                        name = o.getString("name"),
+                        icon = o.optInt("icon", 0),
+                        limited = o.optBoolean("limited", true),
+                        cents = o.optLong("cents", 0L)
+                    )
+                )
+            }
+            out
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    fun saveFunds(list: List<Fund>) {
+        val arr = JSONArray()
+        for (f in list) {
+            val o = JSONObject()
+            o.put("id", f.id)
+            o.put("name", f.name)
+            o.put("icon", f.icon)
+            o.put("limited", f.limited)
+            o.put("cents", f.cents)
+            arr.put(o)
+        }
+        p.edit().putString("funds", arr.toString()).apply()
     }
 
     var theme: ThemeMode
@@ -151,7 +191,7 @@ class Store(context: Context) {
             .remove("acc_user").remove("acc_email").remove("acc_salt").remove("acc_hash")
             .remove("logged_in")
             .remove("goal").remove("initial").remove("currency").remove("target")
-            .remove("txs")
+            .remove("txs").remove("funds")
             .apply()
     }
 }

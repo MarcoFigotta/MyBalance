@@ -21,6 +21,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         private set
     var txs by mutableStateOf<List<Tx>>(store.loadTxs())
         private set
+    var funds by mutableStateOf<List<Fund>>(store.loadFunds())
+        private set
     var themeMode by mutableStateOf(store.theme)
         private set
     var langMode by mutableStateOf(store.lang)
@@ -54,6 +56,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         account = acc
         profile = null
         txs = emptyList()
+        funds = emptyList()
         loggedIn = true
     }
 
@@ -106,6 +109,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         account = null
         profile = null
         txs = emptyList()
+        funds = emptyList()
         loggedIn = false
     }
 
@@ -157,11 +161,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         cents: Long,
         period: Period,
         tag: Tag,
-        rule: Recurrence? = null
+        rule: Recurrence? = null,
+        fundId: Long? = null
     ) {
         val lastId = txs.maxOfOrNull { it.id } ?: 0L
         val id = maxOf(System.currentTimeMillis(), lastId + 1)
-        val tx = Tx(id, type, name, cents, period, tag, LocalDate.now().toEpochDay(), rule)
+        val tx = Tx(id, type, name, cents, period, tag, LocalDate.now().toEpochDay(), rule, emptyList(), fundId)
         val updated = txs + tx
         store.saveTxs(updated)
         txs = updated
@@ -175,11 +180,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         cents: Long,
         period: Period,
         tag: Tag,
-        rule: Recurrence?
+        rule: Recurrence?,
+        fundId: Long? = null
     ) {
         val updated = txs.map {
             if (it.id == id) {
-                it.copy(type = type, name = name, cents = cents, period = period, tag = tag, rule = rule)
+                it.copy(type = type, name = name, cents = cents, period = period, tag = tag, rule = rule, fundId = fundId)
             } else {
                 it
             }
@@ -189,7 +195,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Sostituisce obiettivo, soldi iniziali e movimenti con quelli di un salvataggio. */
-    fun importData(p: Profile, list: List<Tx>) {
+    fun importData(p: Profile, list: List<Tx>, newFunds: List<Fund> = emptyList()) {
         val seen = HashSet<Long>()
         var next = System.currentTimeMillis()
         val fixed = list.map {
@@ -203,14 +209,41 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
         store.saveProfile(p)
         store.saveTxs(fixed)
+        store.saveFunds(newFunds)
         profile = p
         txs = fixed
+        funds = newFunds
     }
 
     fun deleteTx(id: Long) {
         val updated = txs.filter { it.id != id }
         store.saveTxs(updated)
         txs = updated
+    }
+
+    // ----- Fondi -----
+
+    fun addFund(name: String, icon: Int, limited: Boolean, cents: Long) {
+        val lastId = funds.maxOfOrNull { it.id } ?: 0L
+        val id = maxOf(System.currentTimeMillis(), lastId + 1)
+        val updated = funds + Fund(id, name, icon, limited, cents)
+        store.saveFunds(updated)
+        funds = updated
+    }
+
+    fun updateFund(f: Fund) {
+        val updated = funds.map { if (it.id == f.id) f else it }
+        store.saveFunds(updated)
+        funds = updated
+    }
+
+    fun deleteFund(id: Long) {
+        val newFunds = funds.filter { it.id != id }
+        val newTxs = txs.map { if (it.fundId == id) it.copy(fundId = null) else it }
+        store.saveFunds(newFunds)
+        store.saveTxs(newTxs)
+        funds = newFunds
+        txs = newTxs
     }
 
     // ----- Ripetizioni annullate (dalla cronologia) -----

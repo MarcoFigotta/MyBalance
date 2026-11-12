@@ -100,10 +100,11 @@ private fun Router(vm: MainViewModel) {
     }
 }
 
-/** Schede: 0 = Entrata/Uscita (sinistra), 1 = Bilancio (centro), 2 = Account (destra). */
+/** Schede: 0 Entrata/Uscita, 1 Cronologia, 2 Bilancio (centro), 3 Fondo cassa, 4 Account. */
 @Composable
 private fun MainShell(vm: MainViewModel) {
-    var tab by rememberSaveable { mutableStateOf(1) }
+    var tab by rememberSaveable { mutableStateOf(2) }
+    var pendingEdit by remember { mutableStateOf<Tx?>(null) }
     val keyboardOpen = WindowInsets.ime.getBottom(LocalDensity.current) > 0
 
     Column(modifier = Modifier.fillMaxSize()) {
@@ -111,8 +112,13 @@ private fun MainShell(vm: MainViewModel) {
             .weight(1f)
             .fillMaxWidth()) {
             when (tab) {
-                0 -> TransactionsScreen(vm)
-                1 -> HomeScreen(vm)
+                0 -> TransactionsScreen(vm, pendingEdit, onEditHandled = { pendingEdit = null })
+                1 -> HistoryScreen(vm, onEdit = {
+                    pendingEdit = it
+                    tab = 0
+                })
+                2 -> HomeScreen(vm)
+                3 -> FundsScreen(vm)
                 else -> SettingsScreen(vm)
             }
         }
@@ -128,42 +134,52 @@ private fun NavBar(selected: Int, onSelect: (Int) -> Unit) {
     val p = LocalPalette.current
     Box(modifier = Modifier
         .fillMaxWidth()
-        .padding(start = 20.dp, end = 20.dp, bottom = 8.dp, top = 4.dp)) {
+        .padding(start = 12.dp, end = 12.dp, bottom = 8.dp, top = 4.dp)) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(32.dp))
                 .background(p.bar)
-                .padding(horizontal = 10.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly,
+                .padding(horizontal = 6.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            NavItem(Ic.SWAP, l("Income/Expense", "Entrata/Uscita"), selected == 0, big = false) { onSelect(0) }
-            NavItem(Ic.GAUGE, l("Balance", "Bilancio"), selected == 1, big = true) { onSelect(1) }
-            NavItem(Ic.USER, l("Account", "Account"), selected == 2, big = false) { onSelect(2) }
+            val m = { sel: Boolean -> Modifier.weight(if (sel) 2.2f else 1f) }
+            NavItem(Ic.SWAP, l("Income/Expense", "Entrata/Uscita"), selected == 0, false, m(selected == 0)) { onSelect(0) }
+            NavItem(Ic.HISTORY, l("History", "Cronologia"), selected == 1, false, m(selected == 1)) { onSelect(1) }
+            NavItem(Ic.GAUGE, l("Balance", "Bilancio"), selected == 2, true, m(selected == 2)) { onSelect(2) }
+            NavItem(Ic.WALLET, l("Cash funds", "Fondo cassa"), selected == 3, false, m(selected == 3)) { onSelect(3) }
+            NavItem(Ic.USER, l("Account", "Account"), selected == 4, false, m(selected == 4)) { onSelect(4) }
         }
     }
 }
 
 @Composable
-private fun NavItem(icon: Ic, label: String, selected: Boolean, big: Boolean, onClick: () -> Unit) {
+private fun NavItem(
+    icon: Ic,
+    label: String,
+    selected: Boolean,
+    big: Boolean,
+    modifier: Modifier,
+    onClick: () -> Unit
+) {
     val p = LocalPalette.current
     val tint = if (selected) BarAccent else p.onBar.copy(alpha = 0.65f)
     Column(
-        modifier = Modifier
+        modifier = modifier
             .clip(RoundedCornerShape(22.dp))
             .background(if (selected) Color.White.copy(alpha = 0.10f) else Color.Transparent)
             .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 8.dp),
+            .padding(horizontal = 2.dp, vertical = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        AppIcon(icon, tint, iconSize = if (big) 30.dp else 24.dp)
+        AppIcon(icon, tint, iconSize = if (big) 28.dp else 24.dp)
         Spacer(Modifier.height(2.dp))
         Text(
             label,
-            color = tint,
-            fontSize = if (big) 12.sp else 11.sp,
-            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+            color = if (selected) tint else Color.Transparent,
+            fontSize = 10.sp,
+            fontWeight = FontWeight.SemiBold,
             maxLines = 1
         )
     }
