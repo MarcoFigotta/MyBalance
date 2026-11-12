@@ -143,8 +143,10 @@ private fun FundForm(vm: MainViewModel, editId: Long, available: Long, currency:
     var name by rememberSaveable { mutableStateOf(existing?.name ?: "") }
     var iconIdx by rememberSaveable { mutableStateOf(existing?.icon ?: 0) }
     var limited by rememberSaveable { mutableStateOf(existing?.limited ?: true) }
-    var cents by rememberSaveable { mutableStateOf(existing?.cents ?: 0L) }
-    var amountText by rememberSaveable { mutableStateOf(if (existing != null) plainAmount(existing.cents) else "") }
+    // In modifica l'importo mostrato e' il SALDO attuale del fondo (quota iniziale + movimenti).
+    val startBalance = if (existing != null) fundBalanceCents(existing, vm.txs, LocalDate.now()).coerceIn(0L, available) else 0L
+    var cents by rememberSaveable { mutableStateOf(startBalance) }
+    var amountText by rememberSaveable { mutableStateOf(if (existing != null) plainAmount(startBalance) else "") }
     var tried by rememberSaveable { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
 
@@ -267,14 +269,10 @@ private fun FundForm(vm: MainViewModel, editId: Long, available: Long, currency:
                     onClose()
                 } else {
                     val profile = vm.profile
-                    val newBalance = fundBalanceCents(existing, vm.txs, today) - existing.cents + cents
-                    if (limited && newBalance < 0L) {
-                        error = l(
-                            "A limited fund cannot end below zero. Increase the amount or turn off the limit.",
-                            "Un fondo limitato non può finire sotto zero. Aumenta l'importo o togli il limite."
-                        )
-                    } else if (profile != null) {
-                        vm.updateFund(existing.copy(name = name.trim(), icon = iconIdx, limited = limited, cents = cents))
+                    // nuova quota iniziale = saldo voluto - effetto dei movimenti gia' assegnati al fondo
+                    val moves = fundBalanceCents(existing, vm.txs, today) - existing.cents
+                    if (profile != null) {
+                        vm.updateFund(existing.copy(name = name.trim(), icon = iconIdx, limited = limited, cents = cents - moves))
                         onClose()
                     }
                 }
@@ -301,7 +299,7 @@ fun FundsScreen(vm: MainViewModel) {
 
     if (formOpen) {
         val existing = vm.funds.firstOrNull { it.id == editId }
-        val available = maxOf(0L, unallocated + (existing?.cents ?: 0L))
+        val available = maxOf(0L, unallocated + (if (existing != null) fundBalanceCents(existing, vm.txs, LocalDate.now()) else 0L))
         FundForm(vm, editId, available, profile.currency) { formOpen = false }
     } else {
         FundList(
