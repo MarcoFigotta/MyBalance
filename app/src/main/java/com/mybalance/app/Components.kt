@@ -1,5 +1,11 @@
 package com.mybalance.app
 
+import kotlinx.coroutines.delay
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -368,5 +374,20 @@ fun SettingRow(
             Spacer(Modifier.width(6.dp))
         }
         if (!danger) AppIcon(Ic.CHEVRON_RIGHT, p.muted, iconSize = 18.dp)
+    }
+}
+
+
+/** Ingresso morbido: dissolvenza + piccola salita, con ritardo crescente per indice. */
+@Composable
+fun Modifier.appear(index: Int = 0): Modifier {
+    val a = remember { Animatable(0f) }
+    LaunchedEffect(Unit) {
+        delay(index.coerceIn(0, 8) * 50L)
+        a.animateTo(1f, tween(380, easing = FastOutSlowInEasing))
+    }
+    return this.graphicsLayer {
+        alpha = a.value
+        translationY = (1f - a.value) * 24.dp.toPx()
     }
 }

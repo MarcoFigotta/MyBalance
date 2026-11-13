@@ -374,10 +374,11 @@ private fun FundList(vm: MainViewModel, profile: Profile, unallocated: Long, onN
             )
         }
 
-        for (f in vm.funds) {
+        vm.funds.forEachIndexed { idx, f ->
             val balance = fundBalanceCents(f, vm.txs, today)
             Row(
                 modifier = Modifier
+                    .appear(idx + 2)
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(18.dp))
                     .background(p.surface)

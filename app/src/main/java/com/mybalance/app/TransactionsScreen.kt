@@ -1,5 +1,6 @@
 package com.mybalance.app
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -311,6 +312,7 @@ private fun CustomPanel(
 /** Riga di una voce periodica, con matita (modifica) e X (elimina). */
 @Composable
 fun RecurringRow(
+    modifier: Modifier = Modifier,
     tx: Tx,
     currency: String,
     today: LocalDate,
@@ -331,7 +333,7 @@ fun RecurringRow(
     if (note != null) detail = detail + " · " + note
 
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clip(shape)
             .background(p.surface)
@@ -598,7 +600,7 @@ fun TransactionsScreen(vm: MainViewModel, pendingEdit: Tx?, onEditHandled: () ->
                     }
                 }
 
-                if (isCustom) {
+                AnimatedVisibility(visible = isCustom) {
                     CustomPanel(
                         unit = unit,
                         onUnit = { unitIdx = it.ordinal },
@@ -681,6 +683,7 @@ fun TransactionsScreen(vm: MainViewModel, pendingEdit: Tx?, onEditHandled: () ->
 /** Una singola occorrenza di una ripetizione: si puo' annullare il giorno stesso, o ripristinare. */
 @Composable
 fun OccurrenceRow(
+    modifier: Modifier = Modifier,
     tx: Tx,
     currency: String,
     date: Long,
@@ -696,7 +699,7 @@ fun OccurrenceRow(
     val tone = if (income) p.positive else p.negative
     val shown = if (cancelled) p.muted else tone
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(18.dp))
             .background(p.surface)

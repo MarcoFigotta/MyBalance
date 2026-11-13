@@ -29,13 +29,13 @@ import java.time.LocalDate
 
 /** Riga di un movimento (usata sia nel Bilancio sia in Entrata/Uscita). */
 @Composable
-fun TxRow(tx: Tx, currency: String, onDelete: (() -> Unit)? = null, note: String? = null) {
+fun TxRow(tx: Tx, currency: String, onDelete: (() -> Unit)? = null, note: String? = null, modifier: Modifier = Modifier) {
     val l = LocalL.current
     val p = LocalPalette.current
     val income = tx.type == TxType.INCOME
     val tone = if (income) p.positive else p.negative
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(18.dp))
             .background(p.surface)
@@ -183,7 +183,7 @@ fun HomeScreen(vm: MainViewModel) {
                 color = p.muted, fontSize = 14.sp
             )
         } else {
-            for (tx in recent) TxRow(tx, cur, note = fundNote(tx, vm.funds, l))
+            recent.forEachIndexed { i, tx -> TxRow(tx, cur, note = fundNote(tx, vm.funds, l), modifier = Modifier.appear(i + 2)) }
         }
         Spacer(Modifier.height(8.dp))
     }

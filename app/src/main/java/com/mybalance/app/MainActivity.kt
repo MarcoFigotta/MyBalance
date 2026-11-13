@@ -1,5 +1,18 @@
 package com.mybalance.app
 
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.AnimatedContent
 import android.app.Activity
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -111,15 +124,25 @@ private fun MainShell(vm: MainViewModel) {
         Box(modifier = Modifier
             .weight(1f)
             .fillMaxWidth()) {
-            when (tab) {
-                0 -> TransactionsScreen(vm, pendingEdit, onEditHandled = { pendingEdit = null })
-                1 -> HistoryScreen(vm, onEdit = {
-                    pendingEdit = it
-                    tab = 0
-                })
-                2 -> HomeScreen(vm)
-                3 -> FundsScreen(vm)
-                else -> SettingsScreen(vm)
+            AnimatedContent(
+                targetState = tab,
+                transitionSpec = {
+                    val dir = if (targetState > initialState) 1 else -1
+                    (fadeIn(tween(260)) + slideInHorizontally(tween(300)) { w -> w / 8 * dir }) togetherWith
+                        (fadeOut(tween(140)) + slideOutHorizontally(tween(300)) { w -> -w / 8 * dir })
+                },
+                label = "tab"
+            ) { t ->
+                when (t) {
+                    0 -> TransactionsScreen(vm, pendingEdit, onEditHandled = { pendingEdit = null })
+                    1 -> HistoryScreen(vm, onEdit = { tx ->
+                        pendingEdit = tx
+                        tab = 0
+                    })
+                    2 -> HomeScreen(vm)
+                    3 -> FundsScreen(vm)
+                    else -> SettingsScreen(vm)
+                }
             }
         }
         if (!keyboardOpen) {
@@ -144,40 +167,51 @@ private fun NavBar(selected: Int, onSelect: (Int) -> Unit) {
             horizontalArrangement = Arrangement.spacedBy(2.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            val m = { sel: Boolean -> Modifier.weight(if (sel) 2.2f else 1f) }
-            NavItem(Ic.SWAP, l("Income/Expense", "Entrata/Uscita"), selected == 0, false, m(selected == 0)) { onSelect(0) }
-            NavItem(Ic.HISTORY, l("History", "Cronologia"), selected == 1, false, m(selected == 1)) { onSelect(1) }
-            NavItem(Ic.GAUGE, l("Balance", "Bilancio"), selected == 2, true, m(selected == 2)) { onSelect(2) }
-            NavItem(Ic.WALLET, l("Cash funds", "Fondo cassa"), selected == 3, false, m(selected == 3)) { onSelect(3) }
-            NavItem(Ic.USER, l("Account", "Account"), selected == 4, false, m(selected == 4)) { onSelect(4) }
+            NavItem(Ic.SWAP, l("Income/Expense", "Entrata/Uscita"), selected == 0, false) { onSelect(0) }
+            NavItem(Ic.HISTORY, l("History", "Cronologia"), selected == 1, false) { onSelect(1) }
+            NavItem(Ic.GAUGE, l("Balance", "Bilancio"), selected == 2, true) { onSelect(2) }
+            NavItem(Ic.WALLET, l("Cash funds", "Fondo cassa"), selected == 3, false) { onSelect(3) }
+            NavItem(Ic.USER, l("Account", "Account"), selected == 4, false) { onSelect(4) }
         }
     }
 }
 
 @Composable
-private fun NavItem(
+private fun RowScope.NavItem(
     icon: Ic,
     label: String,
     selected: Boolean,
     big: Boolean,
-    modifier: Modifier,
     onClick: () -> Unit
 ) {
     val p = LocalPalette.current
-    val tint = if (selected) BarAccent else p.onBar.copy(alpha = 0.65f)
+    val w by animateFloatAsState(if (selected) 2.2f else 1f, tween(320, easing = FastOutSlowInEasing), label = "w")
+    val scale by animateFloatAsState(if (selected) 1.12f else 1f, spring(dampingRatio = 0.55f, stiffness = 400f), label = "s")
+    val tint by animateColorAsState(
+        if (selected) BarAccent else p.onBar.copy(alpha = 0.65f), tween(250), label = "c"
+    )
+    val bg by animateColorAsState(
+        if (selected) Color.White.copy(alpha = 0.10f) else Color.Transparent, tween(250), label = "b"
+    )
+    val labelAlpha by animateFloatAsState(if (selected) 1f else 0f, tween(250), label = "a")
     Column(
-        modifier = modifier
+        modifier = Modifier
+            .weight(w)
             .clip(RoundedCornerShape(22.dp))
-            .background(if (selected) Color.White.copy(alpha = 0.10f) else Color.Transparent)
+            .background(bg)
             .clickable(onClick = onClick)
             .padding(horizontal = 2.dp, vertical = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        AppIcon(icon, tint, iconSize = if (big) 28.dp else 24.dp)
+        AppIcon(
+            icon, tint,
+            modifier = Modifier.graphicsLayer { scaleX = scale; scaleY = scale },
+            iconSize = if (big) 28.dp else 24.dp
+        )
         Spacer(Modifier.height(2.dp))
         Text(
             label,
-            color = if (selected) tint else Color.Transparent,
+            color = tint.copy(alpha = labelAlpha),
             fontSize = 10.sp,
             fontWeight = FontWeight.SemiBold,
             maxLines = 1

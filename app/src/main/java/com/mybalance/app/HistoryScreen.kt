@@ -60,6 +60,7 @@ fun HistoryScreen(vm: MainViewModel, onEdit: (Tx) -> Unit) {
         }
         items(recurring, key = { it.id }) { tx ->
             RecurringRow(
+                modifier = Modifier.animateItem(),
                 tx = tx,
                 currency = cur,
                 today = today,
@@ -100,10 +101,11 @@ fun HistoryScreen(vm: MainViewModel, onEdit: (Tx) -> Unit) {
                     cancelled = h.cancelled,
                     onCancel = { vm.skipOccurrence(h.tx.id, h.date) },
                     onRestore = { vm.restoreOccurrence(h.tx.id, h.date) },
+                    modifier = Modifier.animateItem(),
                     note = fundNote(h.tx, vm.funds, l)
                 )
             } else {
-                TxRow(h.tx, cur, onDelete = { pendingDelete = h.tx }, note = fundNote(h.tx, vm.funds, l))
+                TxRow(h.tx, cur, onDelete = { pendingDelete = h.tx }, note = fundNote(h.tx, vm.funds, l), modifier = Modifier.animateItem())
             }
         }
     }
