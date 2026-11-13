@@ -1,5 +1,13 @@
 package com.mybalance.app
 
+import androidx.compose.ui.unit.Dp
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.animation.togetherWith
@@ -128,8 +136,9 @@ private fun MainShell(vm: MainViewModel) {
                 targetState = tab,
                 transitionSpec = {
                     val dir = if (targetState > initialState) 1 else -1
-                    (fadeIn(tween(260)) + slideInHorizontally(tween(300)) { w -> w / 8 * dir }) togetherWith
-                        (fadeOut(tween(140)) + slideOutHorizontally(tween(300)) { w -> -w / 8 * dir })
+                    val swoosh = CubicBezierEasing(0.2f, 0.9f, 0.2f, 1f)
+                    (fadeIn(tween(240)) + slideInHorizontally(tween(430, easing = swoosh)) { w -> w * dir }) togetherWith
+                        (fadeOut(tween(200)) + slideOutHorizontally(tween(430, easing = swoosh)) { w -> -w * dir / 3 })
                 },
                 label = "tab"
             ) { t ->
@@ -155,23 +164,45 @@ private fun MainShell(vm: MainViewModel) {
 private fun NavBar(selected: Int, onSelect: (Int) -> Unit) {
     val l = LocalL.current
     val p = LocalPalette.current
-    Box(modifier = Modifier
+    val move = spring<Dp>(dampingRatio = 0.75f, stiffness = 380f)
+    BoxWithConstraints(modifier = Modifier
         .fillMaxWidth()
         .padding(start = 12.dp, end = 12.dp, bottom = 8.dp, top = 4.dp)) {
-        Row(
+        val inner = maxWidth - 12.dp
+        val gap = 2.dp
+        val unit = (inner - gap * 4) / 6.2f
+        val pillX by animateDpAsState(6.dp + (unit + gap) * selected, move, label = "px")
+        val pillW by animateDpAsState(unit * 2.2f, move, label = "pw")
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
+                .height(IntrinsicSize.Min)
                 .clip(RoundedCornerShape(32.dp))
                 .background(p.bar)
-                .padding(horizontal = 6.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(2.dp),
-            verticalAlignment = Alignment.CenterVertically
         ) {
-            NavItem(Ic.SWAP, l("Income/Expense", "Entrata/Uscita"), selected == 0, false) { onSelect(0) }
-            NavItem(Ic.HISTORY, l("History", "Cronologia"), selected == 1, false) { onSelect(1) }
-            NavItem(Ic.GAUGE, l("Balance", "Bilancio"), selected == 2, true) { onSelect(2) }
-            NavItem(Ic.WALLET, l("Cash funds", "Fondo cassa"), selected == 3, false) { onSelect(3) }
-            NavItem(Ic.USER, l("Account", "Account"), selected == 4, false) { onSelect(4) }
+            // l'"onda" che scivola sotto la voce selezionata
+            Box(
+                modifier = Modifier
+                    .offset(x = pillX)
+                    .width(pillW)
+                    .fillMaxHeight()
+                    .padding(vertical = 8.dp)
+                    .clip(RoundedCornerShape(22.dp))
+                    .background(Color.White.copy(alpha = 0.10f))
+            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 6.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(gap),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                NavItem(Ic.SWAP, l("Income/Expense", "Entrata/Uscita"), selected == 0, false) { onSelect(0) }
+                NavItem(Ic.HISTORY, l("History", "Cronologia"), selected == 1, false) { onSelect(1) }
+                NavItem(Ic.GAUGE, l("Balance", "Bilancio"), selected == 2, true) { onSelect(2) }
+                NavItem(Ic.WALLET, l("Cash funds", "Fondo cassa"), selected == 3, false) { onSelect(3) }
+                NavItem(Ic.USER, l("Account", "Account"), selected == 4, false) { onSelect(4) }
+            }
         }
     }
 }
@@ -185,20 +216,16 @@ private fun RowScope.NavItem(
     onClick: () -> Unit
 ) {
     val p = LocalPalette.current
-    val w by animateFloatAsState(if (selected) 2.2f else 1f, tween(320, easing = FastOutSlowInEasing), label = "w")
+    val w by animateFloatAsState(if (selected) 2.2f else 1f, spring(dampingRatio = 0.75f, stiffness = 380f), label = "w")
     val scale by animateFloatAsState(if (selected) 1.12f else 1f, spring(dampingRatio = 0.55f, stiffness = 400f), label = "s")
     val tint by animateColorAsState(
         if (selected) BarAccent else p.onBar.copy(alpha = 0.65f), tween(250), label = "c"
     )
-    val bg by animateColorAsState(
-        if (selected) Color.White.copy(alpha = 0.10f) else Color.Transparent, tween(250), label = "b"
-    )
     val labelAlpha by animateFloatAsState(if (selected) 1f else 0f, tween(250), label = "a")
     Column(
         modifier = Modifier
-            .weight(w)
+            .weight(w.coerceAtLeast(0.1f))
             .clip(RoundedCornerShape(22.dp))
-            .background(bg)
             .clickable(onClick = onClick)
             .padding(horizontal = 2.dp, vertical = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally
