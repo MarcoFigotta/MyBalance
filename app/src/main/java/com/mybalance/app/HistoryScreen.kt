@@ -1,5 +1,22 @@
 package com.mybalance.app
 
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.Alignment
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.Slider
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
+import androidx.compose.foundation.background
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -28,8 +45,24 @@ fun HistoryScreen(vm: MainViewModel, onEdit: (Tx) -> Unit) {
     val today = LocalDate.now()
     var pendingDelete by remember { mutableStateOf<Tx?>(null) }
 
-    val recurring = vm.txs.filter { it.period != Period.ONCE }.sortedByDescending { it.id }
-    val history = remember(vm.txs, today) { buildHistory(vm.txs, today) }
+    var query by rememberSaveable { mutableStateOf("") }
+    var typeIdx by rememberSaveable { mutableStateOf(0) } // 0 tutti, 1 incassi, 2 spese
+    var atLeast by rememberSaveable { mutableStateOf(true) }
+    var amountText by rememberSaveable { mutableStateOf("") }
+    var panelOpen by rememberSaveable { mutableStateOf(false) }
+
+    val typeFilter: TxType? = when (typeIdx) {
+        1 -> TxType.INCOME
+        2 -> TxType.EXPENSE
+        else -> null
+    }
+    val amountFilter: Long? = parseCents(amountText)
+    val filtersOn = typeFilter != null || amountFilter != null
+    val searching = filtersOn || query.isNotBlank()
+    val shown = vm.txs.filter { txMatches(it, query, typeFilter, amountFilter, atLeast) }
+    val recurring = shown.filter { it.period != Period.ONCE }.sortedByDescending { it.id }
+    val history = remember(vm.txs, today, query, typeIdx, atLeast, amountText) { buildHistory(shown, today) }
+    val maxCents = maxOf(100L, vm.txs.maxOfOrNull { it.cents } ?: 0L)
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -38,6 +71,81 @@ fun HistoryScreen(vm: MainViewModel, onEdit: (Tx) -> Unit) {
     ) {
         item {
             Text(l("History", "Cronologia"), color = p.text, fontSize = 28.sp, fontWeight = FontWeight.Bold)
+        }
+
+        item {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                AppField(
+                    value = query,
+                    onValueChange = { query = it.take(40) },
+                    label = l("Name", "Nome"),
+                    modifier = Modifier.weight(1f),
+                    imeAction = ImeAction.Search
+                )
+                val fshape = RoundedCornerShape(18.dp)
+                Box(
+                    modifier = Modifier
+                        .size(56.dp)
+                        .clip(fshape)
+                        .background(if (filtersOn) p.accent else p.surface)
+                        .border(1.dp, if (filtersOn) p.accent else p.outline, fshape)
+                        .clickable { panelOpen = !panelOpen },
+                    contentAlignment = Alignment.Center
+                ) {
+                    AppIcon(Ic.FUNNEL, if (filtersOn) p.onAccent else p.text, iconSize = 24.dp)
+                }
+            }
+        }
+        item {
+            AnimatedVisibility(visible = panelOpen) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(p.surface)
+                        .padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    SectionLabel(l("Type", "Tipo"))
+                    ChipFlow {
+                        Chip(l("All", "Tutti"), typeIdx == 0, { typeIdx = 0 })
+                        Chip(l("Income", "Incasso"), typeIdx == 1, { typeIdx = 1 }, tint = p.positive)
+                        Chip(l("Expense", "Spesa"), typeIdx == 2, { typeIdx = 2 }, tint = p.negative)
+                    }
+                    SectionLabel(l("Amount", "Importo"))
+                    ChipFlow {
+                        Chip(l("From", "A partire da"), atLeast, { atLeast = true })
+                        Chip(l("Up to", "Fino a"), !atLeast, { atLeast = false })
+                    }
+                    AppField(
+                        value = amountText,
+                        onValueChange = { amountText = sanitizeAmount(it) },
+                        label = l("Amount", "Importo"),
+                        keyboardType = KeyboardType.Decimal,
+                        suffix = currencySymbol(cur),
+                        imeAction = ImeAction.Done
+                    )
+                    Slider(
+                        value = ((amountFilter ?: 0L).toDouble() / maxCents.toDouble()).coerceIn(0.0, 1.0).toFloat(),
+                        onValueChange = { f ->
+                            val step = if (maxCents >= 10000L) 100L else 1L
+                            val c = Math.round(f.toDouble() * maxCents.toDouble() / step.toDouble()) * step
+                            amountText = plainAmount(c)
+                        },
+                        colors = SliderDefaults.colors(
+                            thumbColor = p.accent,
+                            activeTrackColor = p.accent,
+                            inactiveTrackColor = p.track
+                        )
+                    )
+                    LinkButton(l("Reset filters", "Azzera filtri")) {
+                        query = ""
+                        typeIdx = 0
+                        atLeast = true
+                        amountText = ""
+                    }
+                }
+            }
         }
 
         item {
@@ -50,7 +158,7 @@ fun HistoryScreen(vm: MainViewModel, onEdit: (Tx) -> Unit) {
         if (recurring.isEmpty()) {
             item {
                 Text(
-                    l(
+                    if (searching) l("No results.", "Nessun risultato.") else l(
                         "No recurring income or expenses yet. Add one from the Income/Expense page.",
                         "Nessuna entrata o uscita periodica. Aggiungine una dalla pagina Entrata/Uscita."
                     ),
@@ -89,7 +197,7 @@ fun HistoryScreen(vm: MainViewModel, onEdit: (Tx) -> Unit) {
         }
         if (history.isEmpty()) {
             item {
-                Text(l("Nothing here yet.", "Ancora nessun movimento."), color = p.muted, fontSize = 14.sp)
+                Text(if (searching) l("No results.", "Nessun risultato.") else l("Nothing here yet.", "Ancora nessun movimento."), color = p.muted, fontSize = 14.sp)
             }
         }
         items(history, key = { it.key }) { h ->

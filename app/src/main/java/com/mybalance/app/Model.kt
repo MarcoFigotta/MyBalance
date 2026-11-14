@@ -338,6 +338,18 @@ fun parseCents(input: String): Long? {
 // Cronologia (logica pura, usata dalla schermata)
 // ---------------------------------------------------------------------------
 
+/** Filtro della cronologia: nome (contiene), tipo, importo (a partire da / fino a). */
+fun txMatches(tx: Tx, query: String, type: TxType?, amountCents: Long?, atLeast: Boolean): Boolean {
+    val q = query.trim()
+    if (q.isNotEmpty() && !tx.name.contains(q, ignoreCase = true)) return false
+    if (type != null && tx.type != type) return false
+    if (amountCents != null) {
+        if (atLeast && tx.cents < amountCents) return false
+        if (!atLeast && tx.cents > amountCents) return false
+    }
+    return true
+}
+
 data class HistItem(
     val key: String,
     val tx: Tx,
