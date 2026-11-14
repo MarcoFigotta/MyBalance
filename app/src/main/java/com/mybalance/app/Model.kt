@@ -57,10 +57,14 @@ data class Tx(
     val startDay: Long,
     val rule: Recurrence? = null,
     val skipped: List<Long> = emptyList(),
-    val fundId: Long? = null
+    val fundId: Long? = null,
+    val splits: List<FundShare> = emptyList()
 )
 
 const val FUND_ICON_COUNT = 8
+
+/** Quota di un movimento (per ogni ripetizione) presa da / messa in un fondo. */
+data class FundShare(val fundId: Long, val cents: Long)
 
 /** Fondo: una "tasca" in cui e' allocata una parte del denaro gia' posseduto. */
 data class Fund(
@@ -181,15 +185,37 @@ fun balanceCents(profile: Profile, txs: List<Tx>, today: LocalDate): Long {
 /** Saldo di un fondo: quota iniziale + movimenti assegnati al fondo. */
 fun fundBalanceCents(fund: Fund, txs: List<Tx>, today: LocalDate): Long {
     var total = fund.cents
-    for (t in txs) if (t.fundId == fund.id) total += txTotal(t, today)
+    for (t in txs) total += fundTxTotal(t, fund.id, today)
     return total
+}
+
+/** Quota (per ripetizione) di un movimento attribuita a un fondo. */
+fun txShareCents(tx: Tx, fundId: Long): Long {
+    if (tx.splits.isNotEmpty()) return tx.splits.filter { it.fundId == fundId }.sumOf { it.cents }
+    return if (tx.fundId == fundId) tx.cents else 0L
+}
+
+/** Effetto totale (fino a oggi) di un movimento su un fondo. */
+fun fundTxTotal(tx: Tx, fundId: Long, day: LocalDate): Long {
+    val share = txShareCents(tx, fundId)
+    if (share == 0L) return 0L
+    val sign = if (tx.type == TxType.INCOME) 1L else -1L
+    return occurrencesUntil(tx, day) * share * sign
 }
 
 /** Denaro non assegnato a nessun fondo. */
 fun unallocatedCents(profile: Profile, funds: List<Fund>, txs: List<Tx>, today: LocalDate): Long {
     var total = profile.initialCents
     for (f in funds) total -= f.cents
-    for (t in txs) if (t.fundId == null) total += txTotal(t, today)
+    for (t in txs) {
+        var attributed = 0L
+        for (f in funds) attributed += txShareCents(t, f.id)
+        val rest = t.cents - attributed
+        if (rest != 0L) {
+            val sign = if (t.type == TxType.INCOME) 1L else -1L
+            total += occurrencesUntil(t, today) * rest * sign
+        }
+    }
     return total
 }
 

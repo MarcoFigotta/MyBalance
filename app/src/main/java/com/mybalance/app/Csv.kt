@@ -27,7 +27,7 @@ fun buildCsv(profile: Profile, txs: List<Tx>, funds: List<Fund> = emptyList()): 
                 .append(f.limited).append(',').append(plainAmount(f.cents)).append('\n')
         }
     }
-    sb.append("section,id,kind,name,amount,period,tag,start_date,every,unit,weekdays_mask,end_type,end_date,end_count,skipped,fund_id\n")
+    sb.append("section,id,kind,name,amount,period,tag,start_date,every,unit,weekdays_mask,end_type,end_date,end_count,skipped,fund_id,splits\n")
     for (t in txs) {
         sb.append("TX,").append(t.id).append(',').append(t.type.name).append(',').append(esc(t.name)).append(',')
             .append(plainAmount(t.cents)).append(',').append(t.period.name).append(',').append(t.tag.name).append(',')
@@ -42,6 +42,7 @@ fun buildCsv(profile: Profile, txs: List<Tx>, funds: List<Fund> = emptyList()): 
         }
         sb.append(',').append(t.skipped.joinToString(";") { day(it) })
         sb.append(',').append(t.fundId?.toString() ?: "")
+        sb.append(',').append(t.splits.joinToString(";") { it.fundId.toString() + ":" + plainAmount(it.cents) })
         sb.append('\n')
     }
     return sb.toString()
@@ -140,7 +141,11 @@ fun parseCsv(text: String): Triple<Profile, List<Tx>, List<Fund>>? {
                             startDay = LocalDate.parse(f[7].trim()).toEpochDay(),
                             rule = rule,
                             skipped = f.getOrNull(14)?.trim()?.takeIf { it.isNotEmpty() }?.split(';')?.map { LocalDate.parse(it.trim()).toEpochDay() } ?: emptyList(),
-                            fundId = f.getOrNull(15)?.trim()?.toLongOrNull()
+                            fundId = f.getOrNull(15)?.trim()?.toLongOrNull(),
+                            splits = f.getOrNull(16)?.trim()?.takeIf { it.isNotEmpty() }?.split(';')?.map {
+                                val kv = it.split(':')
+                                FundShare(kv[0].trim().toLong(), parseCents(kv[1]) ?: return null)
+                            } ?: emptyList()
                         )
                     )
                 }
@@ -148,7 +153,7 @@ fun parseCsv(text: String): Triple<Profile, List<Tx>, List<Fund>>? {
         }
         val p = profile ?: return null
         val ids = funds.map { it.id }.toSet()
-        val fixed = txs.map { if (it.fundId != null && it.fundId !in ids) it.copy(fundId = null) else it }
+        val fixed = txs.map { if (it.fundId != null && it.fundId !in ids) it.copy(fundId = null) else it }.map { t -> t.copy(splits = t.splits.filter { s -> s.fundId in ids }) }
         Triple(p, fixed, funds.toList())
     } catch (e: Exception) {
         null

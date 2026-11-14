@@ -1,5 +1,6 @@
 package com.mybalance.app
 
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -418,7 +419,8 @@ fun TransactionsScreen(vm: MainViewModel, pendingEdit: Tx?, onEditHandled: () ->
     var periodIdx by rememberSaveable { mutableStateOf(Period.ONCE.ordinal) }
     var tagIdx by rememberSaveable { mutableStateOf(Tag.OTHER.ordinal) }
     var tried by rememberSaveable { mutableStateOf(false) }
-    var fundSel by rememberSaveable { mutableStateOf(-1L) }
+    val selIds = remember { mutableStateListOf<Long>() }
+    var shares by remember { mutableStateOf<Map<Long, Long>>(emptyMap()) }
     var fundErr by remember { mutableStateOf<String?>(null) }
 
     // opzioni di "Personalizzata"
@@ -485,7 +487,8 @@ fun TransactionsScreen(vm: MainViewModel, pendingEdit: Tx?, onEditHandled: () ->
         periodIdx = Period.ONCE.ordinal
         tagIdx = Tag.OTHER.ordinal
         tried = false
-        fundSel = -1L
+        selIds.clear()
+        shares = emptyMap()
         fundErr = null
         resetCustomFields()
     }
@@ -498,7 +501,14 @@ fun TransactionsScreen(vm: MainViewModel, pendingEdit: Tx?, onEditHandled: () ->
         periodIdx = tx.period.ordinal
         tagIdx = tx.tag.ordinal
         tried = false
-        fundSel = tx.fundId ?: -1L
+        selIds.clear()
+        if (tx.splits.isNotEmpty()) {
+            selIds.addAll(tx.splits.map { it.fundId }.distinct())
+            shares = tx.splits.groupBy { it.fundId }.mapValues { e -> e.value.sumOf { it.cents } }
+        } else {
+            tx.fundId?.let { selIds.add(it) }
+            shares = emptyMap()
+        }
         fundErr = null
         val r = tx.rule
         if (r != null) {
@@ -529,26 +539,45 @@ fun TransactionsScreen(vm: MainViewModel, pendingEdit: Tx?, onEditHandled: () ->
             )
         } else null
         val type = if (isIncome) TxType.INCOME else TxType.EXPENSE
-        val fid: Long? = if (fundSel >= 0L && vm.funds.any { it.id == fundSel }) fundSel else null
-        val fund = vm.funds.firstOrNull { it.id == fid }
-        if (fund != null && fund.limited && type == TxType.EXPENSE) {
+        val chosen = selIds.filter { id -> vm.funds.any { it.id == id } }
+        val fid: Long? = if (chosen.size == 1) chosen[0] else null
+        val parts: List<FundShare> = if (chosen.size >= 2) {
+            val d = distribute(chosen, c, shares)
+            chosen.map { FundShare(it, d[it] ?: 0L) }
+        } else emptyList()
+        if (type == TxType.EXPENSE && chosen.isNotEmpty()) {
             val others = vm.txs.filter { it.id != editingId }
             val startDay = vm.txs.firstOrNull { it.id == editingId }?.startDay ?: today.toEpochDay()
-            val temp = Tx(0L, type, name.trim(), c, period, Tag.values()[tagIdx], startDay, rule, emptyList(), fid)
-            val after = fundBalanceCents(fund, others, today) + txTotal(temp, today)
-            if (after < 0L) {
-                fundErr = l("Not enough money in this fund.", "Il fondo non ha abbastanza denaro.")
-                return
+            val temp = Tx(0L, type, name.trim(), c, period, Tag.values()[tagIdx], startDay, rule, emptyList(), fid, parts)
+            for (fund in vm.funds.filter { it.id in chosen && it.limited }) {
+                val after = fundBalanceCents(fund, others, today) + fundTxTotal(temp, fund.id, today)
+                if (after < 0L) {
+                    fundErr = l("Not enough money in \"", "Il fondo non ha abbastanza denaro: \"") + fund.name + "\""
+                    return
+                }
             }
         }
         fundErr = null
         if (editingId >= 0L) {
-            vm.updateTx(editingId, type, name.trim(), c, period, Tag.values()[tagIdx], rule, fid)
+            vm.updateTx(editingId, type, name.trim(), c, period, Tag.values()[tagIdx], rule, fid, parts)
         } else {
-            vm.addTx(type, name.trim(), c, period, Tag.values()[tagIdx], rule, fid)
+            vm.addTx(type, name.trim(), c, period, Tag.values()[tagIdx], rule, fid, parts)
         }
         resetForm()
         focus.clearFocus()
+    }
+
+    // ripartizione tra piu' fondi: parti uguali quando cambia la scelta, proporzionale quando cambia l'importo
+    LaunchedEffect(selIds.toList()) {
+        val ids = selIds.toList()
+        if (ids.size >= 2) {
+            val prev = if (ids.all { shares.containsKey(it) }) shares.filterKeys { it in ids } else emptyMap()
+            shares = distribute(ids, cents ?: 0L, prev)
+        }
+    }
+    LaunchedEffect(cents) {
+        val ids = selIds.toList()
+        if (ids.size >= 2) shares = distribute(ids, cents ?: 0L, shares)
     }
 
     LaunchedEffect(pendingEdit) {
@@ -637,10 +666,29 @@ fun TransactionsScreen(vm: MainViewModel, pendingEdit: Tx?, onEditHandled: () ->
                         else l("Take from fund", "Preleva dal fondo")
                     )
                     ChipFlow {
-                        Chip(l("None", "Nessuno"), fundSel < 0L, { fundSel = -1L; fundErr = null })
+                        Chip(l("None", "Nessuno"), selIds.isEmpty(), { selIds.clear(); fundErr = null })
                         for (f in vm.funds) {
-                            Chip(f.name, fundSel == f.id, { fundSel = f.id; fundErr = null })
+                            val on = selIds.contains(f.id)
+                            Chip(
+                                if (on) f.name else "+ " + f.name,
+                                on,
+                                {
+                                    if (on) selIds.remove(f.id) else selIds.add(f.id)
+                                    fundErr = null
+                                }
+                            )
                         }
+                    }
+                    AnimatedVisibility(visible = selIds.size >= 2) {
+                        SplitEditor(
+                            funds = selIds.mapNotNull { id -> vm.funds.firstOrNull { it.id == id } },
+                            total = cents ?: 0L,
+                            shares = shares,
+                            currency = cur,
+                            onShare = { id, v ->
+                                shares = setShare(selIds.toList(), cents ?: 0L, shares, id, v)
+                            }
+                        )
                     }
                     val fe = fundErr
                     if (fe != null) Text(fe, color = p.negative, fontSize = 13.sp)

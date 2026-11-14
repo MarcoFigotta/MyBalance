@@ -162,11 +162,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         period: Period,
         tag: Tag,
         rule: Recurrence? = null,
-        fundId: Long? = null
+        fundId: Long? = null,
+        splits: List<FundShare> = emptyList()
     ) {
         val lastId = txs.maxOfOrNull { it.id } ?: 0L
         val id = maxOf(System.currentTimeMillis(), lastId + 1)
-        val tx = Tx(id, type, name, cents, period, tag, LocalDate.now().toEpochDay(), rule, emptyList(), fundId)
+        val tx = Tx(id, type, name, cents, period, tag, LocalDate.now().toEpochDay(), rule, emptyList(), fundId, splits)
         val updated = txs + tx
         store.saveTxs(updated)
         txs = updated
@@ -181,11 +182,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         period: Period,
         tag: Tag,
         rule: Recurrence?,
-        fundId: Long? = null
+        fundId: Long? = null,
+        splits: List<FundShare> = emptyList()
     ) {
         val updated = txs.map {
             if (it.id == id) {
-                it.copy(type = type, name = name, cents = cents, period = period, tag = tag, rule = rule, fundId = fundId)
+                it.copy(type = type, name = name, cents = cents, period = period, tag = tag, rule = rule, fundId = fundId, splits = splits)
             } else {
                 it
             }
@@ -239,7 +241,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun deleteFund(id: Long) {
         val newFunds = funds.filter { it.id != id }
-        val newTxs = txs.map { if (it.fundId == id) it.copy(fundId = null) else it }
+        val newTxs = txs.map { it.copy(fundId = if (it.fundId == id) null else it.fundId, splits = it.splits.filter { s -> s.fundId != id }) }
         store.saveFunds(newFunds)
         store.saveTxs(newTxs)
         funds = newFunds

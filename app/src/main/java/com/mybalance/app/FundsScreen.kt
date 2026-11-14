@@ -64,10 +64,11 @@ fun fundIconName(i: Int, l: L): String = when (i) {
 
 /** Dicitura "Da: Banca" (uscita) o "In: Banca" (entrata); null se il movimento non ha un fondo. */
 fun fundNote(tx: Tx, funds: List<Fund>, l: L): String? {
-    val id = tx.fundId ?: return null
-    val f = funds.firstOrNull { it.id == id } ?: return null
+    val ids = if (tx.splits.isNotEmpty()) tx.splits.map { it.fundId } else listOfNotNull(tx.fundId)
+    val names = ids.mapNotNull { id -> funds.firstOrNull { it.id == id }?.name }
+    if (names.isEmpty()) return null
     val prefix = if (tx.type == TxType.INCOME) l("To: ", "In: ") else l("From: ", "Da: ")
-    return prefix + f.name
+    return prefix + names.joinToString(", ")
 }
 
 // ---------------------------------------------------------------------------

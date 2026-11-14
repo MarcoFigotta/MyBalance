@@ -84,7 +84,10 @@ class Store(context: Context) {
                         startDay = o.getLong("day"),
                         rule = rule,
                         skipped = o.optJSONArray("skipped")?.let { a -> (0 until a.length()).map { a.getLong(it) } } ?: emptyList(),
-                        fundId = if (o.has("fundId")) o.getLong("fundId") else null
+                        fundId = if (o.has("fundId")) o.getLong("fundId") else null,
+                        splits = o.optJSONArray("splits")?.let { a ->
+                            (0 until a.length()).map { i -> val so = a.getJSONObject(i); FundShare(so.getLong("f"), so.getLong("c")) }
+                        } ?: emptyList()
                     )
                 )
             }
@@ -112,6 +115,11 @@ class Store(context: Context) {
             }
             val fid = t.fundId
             if (fid != null) o.put("fundId", fid)
+            if (t.splits.isNotEmpty()) {
+                val sa = JSONArray()
+                for (s in t.splits) sa.put(JSONObject().put("f", s.fundId).put("c", s.cents))
+                o.put("splits", sa)
+            }
             val r = t.rule
             if (r != null) {
                 val ro = JSONObject()
