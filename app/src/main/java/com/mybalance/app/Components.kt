@@ -1,5 +1,6 @@
 package com.mybalance.app
 
+import androidx.compose.ui.graphics.Color
 import kotlinx.coroutines.delay
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.runtime.LaunchedEffect
@@ -167,15 +168,15 @@ fun AppField(
 }
 
 @Composable
-fun PrimaryButton(text: String, enabled: Boolean = true, onClick: () -> Unit) {
+fun PrimaryButton(text: String, enabled: Boolean = true, tint: Color? = null, onClick: () -> Unit) {
     val p = LocalPalette.current
     Button(
         onClick = onClick,
         enabled = enabled,
         shape = RoundedCornerShape(28.dp),
         colors = ButtonDefaults.buttonColors(
-            containerColor = p.accent,
-            contentColor = p.onAccent,
+            containerColor = tint ?: p.accent,
+            contentColor = if (tint != null) Color.White else p.onAccent,
             disabledContainerColor = p.track,
             disabledContentColor = p.muted
         ),
@@ -196,21 +197,22 @@ fun LinkButton(text: String, onClick: () -> Unit) {
 }
 
 @Composable
-fun Chip(text: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+fun Chip(text: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier, tint: Color? = null) {
     val p = LocalPalette.current
+    val fill = tint ?: p.accent
     val shape = RoundedCornerShape(22.dp)
     Box(
         modifier = modifier
             .clip(shape)
-            .background(if (selected) p.accent else p.surface)
-            .border(1.dp, if (selected) p.accent else p.outline, shape)
+            .background(if (selected) fill else p.surface)
+            .border(1.dp, if (selected) fill else (tint?.copy(alpha = 0.45f) ?: p.outline), shape)
             .clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 10.dp),
         contentAlignment = Alignment.Center
     ) {
         Text(
             text = text,
-            color = if (selected) p.onAccent else p.text,
+            color = if (selected) (if (tint != null) Color.White else p.onAccent) else p.text,
             fontSize = 14.sp,
             fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal
         )

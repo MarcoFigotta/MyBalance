@@ -1,5 +1,7 @@
 package com.mybalance.app
 
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
@@ -602,8 +604,33 @@ fun TransactionsScreen(vm: MainViewModel, pendingEdit: Tx?, onEditHandled: () ->
                     color = p.text, fontSize = 28.sp, fontWeight = FontWeight.Bold
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Chip(l("Income", "Entrata"), isIncome, { typeIdx = 0 })
-                    Chip(l("Expense", "Uscita"), !isIncome, { typeIdx = 1 })
+                    Chip(l("Income", "Entrata"), isIncome, { typeIdx = 0 }, tint = p.positive)
+                    Chip(l("Expense", "Uscita"), !isIncome, { typeIdx = 1 }, tint = p.negative)
+                }
+                val tone by animateColorAsState(if (isIncome) p.positive else p.negative, tween(300), label = "tone")
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(tone.copy(alpha = 0.14f))
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(34.dp)
+                            .clip(CircleShape)
+                            .background(tone.copy(alpha = 0.22f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        AppIcon(if (isIncome) Ic.ARROW_DOWN else Ic.ARROW_UP, tone, iconSize = 20.dp)
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Text(
+                        if (isIncome) l("You are recording an income", "Stai registrando un incasso")
+                        else l("You are recording an expense", "Stai registrando una spesa"),
+                        color = tone, fontSize = 15.sp, fontWeight = FontWeight.SemiBold
+                    )
                 }
 
                 AppField(
@@ -685,9 +712,7 @@ fun TransactionsScreen(vm: MainViewModel, pendingEdit: Tx?, onEditHandled: () ->
                             total = cents ?: 0L,
                             shares = shares,
                             currency = cur,
-                            onShare = { id, v ->
-                                shares = setShare(selIds.toList(), cents ?: 0L, shares, id, v)
-                            }
+                            onChange = { shares = it }
                         )
                     }
                     val fe = fundErr
@@ -698,7 +723,8 @@ fun TransactionsScreen(vm: MainViewModel, pendingEdit: Tx?, onEditHandled: () ->
                 PrimaryButton(
                     if (editingId >= 0L) l("Save changes", "Salva modifiche")
                     else if (isIncome) l("Add income", "Aggiungi entrata")
-                    else l("Add expense", "Aggiungi uscita")
+                    else l("Add expense", "Aggiungi uscita"),
+                    tint = if (isIncome) p.positive else p.negative
                 ) { submit() }
                 if (editingId >= 0L) {
                     LinkButton(l("Cancel editing", "Annulla modifica")) {
