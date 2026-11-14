@@ -1,5 +1,6 @@
 package com.mybalance.app
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.ui.unit.Dp
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.offset
@@ -126,6 +127,7 @@ private fun Router(vm: MainViewModel) {
 private fun MainShell(vm: MainViewModel) {
     var tab by rememberSaveable { mutableStateOf(2) }
     var pendingEdit by remember { mutableStateOf<Tx?>(null) }
+    var draft by remember { mutableStateOf(false) }
     val keyboardOpen = WindowInsets.ime.getBottom(LocalDensity.current) > 0
 
     Column(modifier = Modifier.fillMaxSize()) {
@@ -143,7 +145,7 @@ private fun MainShell(vm: MainViewModel) {
                 label = "tab"
             ) { t ->
                 when (t) {
-                    0 -> TransactionsScreen(vm, pendingEdit, onEditHandled = { pendingEdit = null })
+                    0 -> TransactionsScreen(vm, pendingEdit, onEditHandled = { pendingEdit = null }, onDraft = { draft = it })
                     1 -> HistoryScreen(vm, onEdit = { tx ->
                         pendingEdit = tx
                         tab = 0
@@ -154,7 +156,7 @@ private fun MainShell(vm: MainViewModel) {
                 }
             }
         }
-        if (!keyboardOpen) {
+        AnimatedVisibility(visible = !keyboardOpen && !(draft && tab == 0)) {
             NavBar(selected = tab, onSelect = { tab = it })
         }
     }

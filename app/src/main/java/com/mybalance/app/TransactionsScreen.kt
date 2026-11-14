@@ -1,5 +1,13 @@
 package com.mybalance.app
 
+import androidx.compose.ui.graphics.Color
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.fadeIn
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.runtime.mutableStateListOf
@@ -403,7 +411,12 @@ fun RecurringRow(
 // ---------------------------------------------------------------------------
 
 @Composable
-fun TransactionsScreen(vm: MainViewModel, pendingEdit: Tx?, onEditHandled: () -> Unit) {
+fun TransactionsScreen(
+    vm: MainViewModel,
+    pendingEdit: Tx?,
+    onEditHandled: () -> Unit,
+    onDraft: (Boolean) -> Unit = {}
+) {
     val l = LocalL.current
     val p = LocalPalette.current
     val profile = vm.profile ?: return
@@ -582,6 +595,11 @@ fun TransactionsScreen(vm: MainViewModel, pendingEdit: Tx?, onEditHandled: () ->
         if (ids.size >= 2) shares = distribute(ids, cents ?: 0L, shares)
     }
 
+    // c'e' una bozza se e' stato inserito il nome o l'importo (o si sta modificando): barra fissa in basso, menu nascosto
+    val draft = name.isNotEmpty() || amount.isNotEmpty() || editingId >= 0L
+    LaunchedEffect(draft) { onDraft(draft) }
+    DisposableEffect(Unit) { onDispose { onDraft(false) } }
+
     LaunchedEffect(pendingEdit) {
         val e = pendingEdit
         if (e != null) {
@@ -590,9 +608,12 @@ fun TransactionsScreen(vm: MainViewModel, pendingEdit: Tx?, onEditHandled: () ->
         }
     }
 
+    Column(modifier = Modifier.fillMaxSize()) {
     LazyColumn(
         state = listState,
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .weight(1f)
+            .fillMaxWidth(),
         contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
@@ -719,22 +740,54 @@ fun TransactionsScreen(vm: MainViewModel, pendingEdit: Tx?, onEditHandled: () ->
                     if (fe != null) Text(fe, color = p.negative, fontSize = 13.sp)
                 }
 
-                Spacer(Modifier.height(4.dp))
-                PrimaryButton(
-                    if (editingId >= 0L) l("Save changes", "Salva modifiche")
-                    else if (isIncome) l("Add income", "Aggiungi entrata")
-                    else l("Add expense", "Aggiungi uscita"),
-                    tint = if (isIncome) p.positive else p.negative
-                ) { submit() }
-                if (editingId >= 0L) {
-                    LinkButton(l("Cancel editing", "Annulla modifica")) {
-                        resetForm()
-                        focus.clearFocus()
-                    }
+                if (!draft) {
+                    Spacer(Modifier.height(4.dp))
+                    PrimaryButton(
+                        if (isIncome) l("Add income", "Aggiungi entrata") else l("Add expense", "Aggiungi uscita"),
+                        tint = if (isIncome) p.positive else p.negative
+                    ) { submit() }
                 }
-
             }
         }
+    }
+
+    AnimatedVisibility(
+        visible = draft,
+        enter = slideInVertically(tween(300)) { h -> h } + fadeIn(tween(250)),
+        exit = slideOutVertically(tween(220)) { h -> h } + fadeOut(tween(180))
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(p.bg)
+                .padding(start = 20.dp, end = 20.dp, top = 10.dp, bottom = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            PrimaryButton(
+                if (editingId >= 0L) l("Save changes", "Salva modifiche")
+                else if (isIncome) l("Add income", "Aggiungi incasso")
+                else l("Add expense", "Aggiungi spesa"),
+                tint = if (isIncome) p.positive else p.negative
+            ) { submit() }
+            OutlinedButton(
+                onClick = {
+                    resetForm()
+                    focus.clearFocus()
+                },
+                shape = RoundedCornerShape(28.dp),
+                border = BorderStroke(1.5.dp, p.outline),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    containerColor = Color.Transparent,
+                    contentColor = p.text
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp)
+            ) {
+                Text(l("Discard", "Scarta"), fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+            }
+        }
+    }
     }
 
     if (showDate) {
